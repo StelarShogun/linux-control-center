@@ -1,0 +1,24 @@
+[workspace]
+members = [
+  "crates/core-model",
+  "crates/adapters-hyprland",
+  "crates/adapters-waybar",
+  "crates/adapters-rofi",
+  "crates/adapters-systemd",
+  "crates/privileged-helper",
+  "apps/desktop/src-tauri",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+toml = "0.8"
+toml_edit = "0.22"
+zbus = "4"
+notify = "8"

@@ -1,0 +1,7 @@
+[package]
+name = "adapters-waybar"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]

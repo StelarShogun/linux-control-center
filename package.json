@@ -1,0 +1,12 @@
+{
+  "name": "linux-control-center",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm --dir apps/desktop tauri dev",
+    "frontend:dev": "pnpm --dir apps/desktop dev",
+    "frontend:build": "pnpm --dir apps/desktop build",
+    "rust:check": "cargo check --workspace",
+    "rust:test": "cargo test --workspace"
+  }
+}
