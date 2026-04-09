@@ -1,14 +1,14 @@
 pkgname=linux-control-center
-pkgver=0.1.0
+pkgver=0.0.0.r3.g9832787
 pkgrel=1
 pkgdesc="Desktop UI to preview/apply Hyprland/Waybar/Rofi config with safe backups"
 arch=("x86_64")
-url="https://github.com/linux-control-center/linux-control-center"
+url="https://github.com/StelarShogun/linux-control-center"
 license=("MIT")
 depends=("webkit2gtk-4.1")
 makedepends=("git" "nodejs" "pnpm" "rust" "cargo")
 source=(
-  "git+$url.git"
+  "git+ssh://git@github.com/StelarShogun/linux-control-center.git"
 )
 sha256sums=("SKIP")
 

@@ -1,7 +1,9 @@
 [core]
-	repositoryformatversion = 1
+	repositoryformatversion = 0
 	filemode = true
 	bare = true
 [remote "origin"]
-	url = https://github.com/linux-control-center/linux-control-center.git
+	url = ssh://git@github.com/StelarShogun/linux-control-center.git
 	tagOpt = --no-tags
+	fetch = +refs/*:refs/*
+	mirror = true
