@@ -1,4 +1,4 @@
-use core_model::settings::HyprlandSettings;
+use core_model::settings::{HyprlandBind, HyprlandSettings, HyprlandWindowRule};
 
 /// Lee `~/.config/hypr/hyprland.conf` y extrae los campos que modela
 /// `HyprlandSettings`. Cualquier campo ausente o no parseable queda en `Default`.
@@ -37,6 +37,32 @@ pub fn parse_hyprland_conf(content: &str) -> HyprlandSettings {
 
         if trimmed.is_empty() {
             continue;
+        }
+
+        if block_stack.is_empty() {
+            if let Some(rest) = trimmed
+                .strip_prefix("bind =")
+                .or_else(|| trimmed.strip_prefix("bind="))
+            {
+                if let Some(b) = parse_bind_value(rest.trim()) {
+                    s.keyboard.binds.push(b);
+                }
+                continue;
+            }
+            let wr_key = trimmed
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .to_lowercase();
+            if wr_key == "windowrulev2" {
+                if let Some(eq) = trimmed.find('=') {
+                    let rest = trimmed[eq + 1..].trim();
+                    if let Some(rule) = parse_windowrulev2(rest) {
+                        s.windows.rules.push(rule);
+                    }
+                }
+                continue;
+            }
         }
 
         // Detectar apertura de bloque: "name {" o "name{"
@@ -122,8 +148,86 @@ fn apply_field(s: &mut HyprlandSettings, stack: &[String], key: &str, value: &st
             }
         }
 
+        // input { … }
+        [block] if block == "input" => match key {
+            "kb_layout" => s.input.kb_layout = value.to_string(),
+            "kb_variant" => s.input.kb_variant = value.to_string(),
+            "kb_options" => s.input.kb_options = value.to_string(),
+            "sensitivity" => {
+                if let Ok(f) = value.trim().parse::<f32>() {
+                    s.input.mouse_sensitivity = f;
+                }
+            }
+            "natural_scroll" => {
+                s.input.natural_scroll = parse_bool(value).unwrap_or(s.input.natural_scroll);
+            }
+            _ => {}
+        },
+
+        [outer, inner] if outer == "input" && inner == "touchpad" => {
+            if key == "natural_scroll" {
+                s.input.touchpad_natural_scroll =
+                    parse_bool(value).unwrap_or(s.input.touchpad_natural_scroll);
+            }
+        }
+
         _ => {}
     }
+}
+
+fn parse_bind_value(v: &str) -> Option<HyprlandBind> {
+    let parts: Vec<&str> = v
+        .split(',')
+        .map(|x| x.trim())
+        .filter(|x| !x.is_empty())
+        .collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    let mods: Vec<String> = parts[0]
+        .split_whitespace()
+        .filter(|x| !x.is_empty())
+        .map(str::to_string)
+        .collect();
+    Some(HyprlandBind {
+        modifiers: mods,
+        key: parts[1].to_string(),
+        dispatcher: parts[2].to_string(),
+        args: if parts.len() > 3 {
+            parts[3..].join(", ")
+        } else {
+            String::new()
+        },
+        description: String::new(),
+        enabled: true,
+    })
+}
+
+fn parse_windowrulev2(v: &str) -> Option<HyprlandWindowRule> {
+    let segments: Vec<&str> = v
+        .split(',')
+        .map(|x| x.trim())
+        .filter(|x| !x.is_empty())
+        .collect();
+    if segments.is_empty() {
+        return None;
+    }
+    let mut rule = HyprlandWindowRule {
+        rule: segments[0].to_string(),
+        class: String::new(),
+        title: String::new(),
+        description: String::new(),
+        enabled: true,
+    };
+    for seg in segments.iter().skip(1) {
+        let seg = seg.trim();
+        if let Some(rest) = seg.strip_prefix("class:") {
+            rule.class = rest.trim().to_string();
+        } else if let Some(rest) = seg.strip_prefix("title:") {
+            rule.title = rest.trim().to_string();
+        }
+    }
+    Some(rule)
 }
 
 /// Convierte valores Hyprland `rgba(HHHHHHff)` o `rgb(HHHHHH)` a `#HHHHHH`.
@@ -204,7 +308,15 @@ animations {
 
 input {
     kb_layout = es
+    sensitivity = -0.25
+    natural_scroll = true
+    touchpad {
+        natural_scroll = false
+    }
 }
+
+bind = SUPER, Q, exec, foot
+windowrulev2 = float, class:^(kitty)$
 "#;
 
     #[test]
@@ -233,10 +345,19 @@ input {
     }
 
     #[test]
-    fn ignores_unknown_blocks() {
+    fn parses_input_bind_and_windowrule() {
         let s = parse_hyprland_conf(SAMPLE);
-        // input block should not crash, just be ignored
-        assert_eq!(s.gaps_in, 6);
+        assert_eq!(s.input.kb_layout, "es");
+        assert!((s.input.mouse_sensitivity - (-0.25_f32)).abs() < 1e-4);
+        assert!(s.input.natural_scroll);
+        assert!(!s.input.touchpad_natural_scroll);
+        assert_eq!(s.keyboard.binds.len(), 1);
+        assert_eq!(s.keyboard.binds[0].key, "Q");
+        assert_eq!(s.keyboard.binds[0].dispatcher, "exec");
+        assert_eq!(s.keyboard.binds[0].args, "foot");
+        assert_eq!(s.windows.rules.len(), 1);
+        assert_eq!(s.windows.rules[0].rule, "float");
+        assert_eq!(s.windows.rules[0].class, "^(kitty)$");
     }
 
     #[test]

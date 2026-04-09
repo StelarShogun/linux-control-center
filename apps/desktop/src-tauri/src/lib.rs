@@ -3,6 +3,9 @@ pub mod commands;
 pub mod persistence;
 pub mod state;
 pub mod types;
+pub mod wallpaper_cache;
+pub mod wallpaper_ipc;
+use std::path::PathBuf;
 use tauri::Manager;
 
 pub fn run() {
@@ -27,6 +30,7 @@ pub fn run() {
             hyprland: adapters_hyprland::read_from_system(),
             waybar: adapters_waybar::read_from_system(),
             rofi: adapters_rofi::read_from_system(),
+            wallpaper: core_model::settings::WallpaperAppPreferences::default(),
           };
           // Persistir para que próximos arranques no relean disco innecesariamente.
           if let Err(e) = persistence::save_current_settings(&data_dir, &imported) {
@@ -40,9 +44,20 @@ pub fn run() {
         }
       };
 
+      let mut wallpaper_rt = state::WallpaperRuntime::default();
+      if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        if let Some(disk) = wallpaper_cache::load(&data_dir) {
+          if let Some((col, map)) = wallpaper_catalog::rebuild_from_disk(&home, &disk) {
+            wallpaper_rt.collection = Some(col);
+            wallpaper_rt.id_to_path = map;
+          }
+        }
+      }
+
       app.manage(state::AppState {
         data_dir,
         current: std::sync::Mutex::new(initial),
+        wallpaper: std::sync::Mutex::new(wallpaper_rt),
       });
 
       Ok(())
@@ -57,6 +72,7 @@ pub fn run() {
       commands::apply_config_to_sandbox,
       commands::apply_config_to_real_path,
       commands::apply_live_hyprland,
+      commands::apply_live_waybar,
       commands::rollback_config_file,
       commands::rollback_full_state,
       commands::preview_hyprland_config,
@@ -65,6 +81,24 @@ pub fn run() {
       commands::list_systemd_units,
       commands::get_systemd_unit,
       commands::import_system_settings,
+      commands::list_network_interfaces,
+      commands::get_power_status,
+      commands::set_power_profile,
+      commands::inspect_hyprland_setup_cmd,
+      commands::repair_hyprland_main_include,
+      commands::list_hyprland_main_backups_cmd,
+      commands::list_recent_operations,
+      commands::audit_config_backups,
+      commands::delete_orphan_backup,
+      commands::list_theme_presets,
+      commands::get_theme_preview,
+      commands::apply_theme,
+      wallpaper_ipc::list_wallpapers,
+      wallpaper_ipc::refresh_wallpaper_catalog,
+      wallpaper_ipc::get_wallpaper_preview,
+      wallpaper_ipc::get_current_wallpaper,
+      wallpaper_ipc::get_wallpaper_backend_status,
+      wallpaper_ipc::apply_wallpaper,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

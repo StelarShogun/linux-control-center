@@ -51,6 +51,64 @@ pub fn export_from_settings(s: &HyprlandSettings) -> HyprlandExportResult {
     lines.push(format!("    enabled = {}", s.animations_enabled));
     lines.push("}".into());
 
+    if !s.keyboard.binds.is_empty() {
+        lines.push(String::new());
+        lines.push("# —— Keybindings (Linux Control Center)".into());
+        for b in &s.keyboard.binds {
+            if !b.enabled {
+                continue;
+            }
+            let mods = if b.modifiers.is_empty() {
+                "SUPER".to_string()
+            } else {
+                b.modifiers.join(" ")
+            };
+            lines.push(format!(
+                "bind = {}, {}, {}, {}",
+                mods, b.key, b.dispatcher, b.args
+            ));
+        }
+    }
+
+    if !s.windows.rules.is_empty() {
+        lines.push(String::new());
+        lines.push("# —— Window rules (Linux Control Center)".into());
+        for r in &s.windows.rules {
+            if !r.enabled {
+                continue;
+            }
+            let rule = r.rule.trim();
+            if rule.is_empty() {
+                continue;
+            }
+            let mut parts: Vec<String> = vec![rule.to_string()];
+            let c = r.class.trim();
+            if !c.is_empty() {
+                parts.push(format!("class:{c}"));
+            }
+            let t = r.title.trim();
+            if !t.is_empty() {
+                parts.push(format!("title:{t}"));
+            }
+            lines.push(format!("windowrulev2 = {}", parts.join(", ")));
+        }
+    }
+
+    lines.push(String::new());
+    lines.push("input {".into());
+    lines.push(format!("    kb_layout = {}", s.input.kb_layout));
+    lines.push(format!("    kb_variant = {}", s.input.kb_variant));
+    lines.push(format!("    kb_options = {}", s.input.kb_options));
+    lines.push(format!("    sensitivity = {}", s.input.mouse_sensitivity));
+    lines.push(format!("    natural_scroll = {}", s.input.natural_scroll));
+    lines.push("    touchpad {".into());
+    lines.push(format!(
+        "        natural_scroll = {}",
+        s.input.touchpad_natural_scroll
+    ));
+    lines.push("    }".into());
+    lines.push("}".into());
+
     HyprlandExportResult { content: lines.join("\n") + "\n" }
 }
 

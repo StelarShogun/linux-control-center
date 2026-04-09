@@ -4,10 +4,11 @@ import type { BackendStatus } from "../types/backend";
 import {
   applyConfigToRealPath,
   applyConfigToSandbox,
+  applyLiveWaybar,
   previewWaybarConfig,
   saveSettings,
 } from "../tauri/api";
-import type { ApplyToRealPathResult } from "../tauri/types";
+import type { ApplyLiveResult, ApplyToRealPathResult } from "../tauri/types";
 import OpMessage, { type OpMsg } from "../components/OpMessage";
 import WriteResultPanel from "../components/WriteResultPanel";
 
@@ -26,6 +27,7 @@ const WaybarPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) =>
   const [configPreview, setConfigPreview] = useState<string | null>(null);
   const [sandboxResult, setSandboxResult] = useState<{ path: string; snapshotId: string } | null>(null);
   const [realResult, setRealResult] = useState<ApplyToRealPathResult | null>(null);
+  const [liveResult, setLiveResult] = useState<ApplyLiveResult | null>(null);
 
   const startOp = (label: string) => { setBusy(true); setActiveOp(label); setMessage({ kind: "info", text: `${label}…` }); };
   const endOp = () => { setBusy(false); setActiveOp(null); };
@@ -54,6 +56,9 @@ const WaybarPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) =>
       <p style={styles.note}>
         Controla posición, altura, módulos y opacidad de Waybar.
         Escribe <code>~/.config/waybar/config.jsonc</code> con backup automático.
+        Apply live además envía <code>SIGUSR2</code> al proceso <code>waybar</code> (
+        <code>pkill -USR2 waybar</code>) para recargar la barra sin reiniciar la sesión; requiere Waybar en
+        ejecución y <code>pkill</code> en PATH.
       </p>
       {backendStatus === "loading" && (
         <div style={styles.statusBanner}>Cargando configuración…</div>
@@ -174,9 +179,57 @@ const WaybarPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) =>
         >
           {activeOp === "Write to ~/.config" ? "Escribiendo…" : "Write to ~/.config"}
         </button>
+
+        <button
+          style={styles.saveBtnGreen}
+          disabled={backendStatus !== "ready" || busy}
+          onClick={async () => {
+            if (
+              !window.confirm(
+                "Apply live (Waybar)\n\nEscribe ~/.config/waybar/config.jsonc con backup y ejecuta pkill -USR2 waybar para recargar la barra.\n\nSi Waybar no está corriendo, el archivo se escribe igual pero el reload fallará."
+              )
+            )
+              return;
+            startOp("Apply live");
+            setLiveResult(null);
+            try {
+              const res = await applyLiveWaybar({ snapshot_label: "apply-live-waybar" });
+              setLiveResult(res);
+              setMessage({
+                kind: res.reload_ok ? "success" : "warning",
+                text: res.reload_ok
+                  ? "Config escrita y señal de recarga enviada a Waybar."
+                  : "Config escrita. Recarga Waybar falló (¿proceso inactivo o sin pkill?) — reinicia Waybar o la sesión para ver cambios.",
+              });
+            } catch (e) {
+              setMessage({ kind: "error", text: `Error (apply live): ${String(e)}` });
+            } finally {
+              endOp();
+            }
+          }}
+        >
+          {activeOp === "Apply live" ? "Aplicando…" : "Apply live ⚡"}
+        </button>
       </div>
 
       <OpMessage message={message} />
+
+      {liveResult && (
+        <WriteResultPanel
+          label="apply live — resultado"
+          targetPath={liveResult.write.target_path}
+          backupFileName={liveResult.snapshot.backup_file_name}
+          snapshotId={liveResult.snapshot.id}
+          reloadOk={liveResult.reload_ok}
+          reloadOutput={liveResult.reload_output}
+          rollbackTarget="WaybarConfig"
+          onRollbackSuccess={(s) => {
+            onSettingsChange(s as AppSettings);
+            setLiveResult(null);
+          }}
+          onMessage={setMessage}
+        />
+      )}
 
       {realResult && (
         <WriteResultPanel
@@ -266,6 +319,7 @@ const styles: Record<string, React.CSSProperties> = {
   saveBtn: { ...BTN_BASE, background: "#2e3250", borderColor: "#2e3250", color: "#e2e8f0" },
   saveBtnNeutral: { ...BTN_BASE, background: "#1e2030", borderColor: "#2e3250", color: "#9ca3af" },
   saveBtnAmber: { ...BTN_BASE, background: "#1a1500", borderColor: "#4a3f20", color: "#fbbf24" },
+  saveBtnGreen: { ...BTN_BASE, background: "#0b1f1a", borderColor: "#1a3a2a", color: "#6ee7b7" },
   previewContainer: { marginTop: 24 },
   previewLabel: { fontSize: 11, color: "#6b7280", marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.06em" },
   preview: { background: "#151722", border: "1px solid #2e3250", borderRadius: 8, padding: 16, fontSize: 12, color: "#88c0d0", overflow: "auto", fontFamily: "monospace" },

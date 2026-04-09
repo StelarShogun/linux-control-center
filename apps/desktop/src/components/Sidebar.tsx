@@ -1,29 +1,84 @@
-import type { FC } from "react";
+import { useCallback, useState, type FC } from "react";
 import type { BackendStatus } from "../types/backend";
 
 export type Page =
   | "appearance"
   | "hyprland"
+  | "keybindings"
+  | "window-rules"
   | "waybar"
   | "rofi"
+  | "themes"
+  | "wallpapers"
   | "systemd"
+  | "network"
+  | "power"
   | "snapshots"
-  | "profiles";
+  | "profiles"
+  | "recent_operations";
 
 interface NavItem {
   id: Page;
   label: string;
-  implemented: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { id: "appearance", label: "Appearance", implemented: true },
-  { id: "hyprland", label: "Hyprland", implemented: true },
-  { id: "waybar", label: "Waybar", implemented: true },
-  { id: "rofi", label: "Rofi", implemented: true },
-  { id: "systemd", label: "Systemd", implemented: true },
-  { id: "snapshots", label: "Snapshots", implemented: true },
-  { id: "profiles", label: "Profiles", implemented: true },
+interface NavGroup {
+  id: string;
+  label: string;
+  defaultOpen: boolean;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "system",
+    label: "Sistema",
+    defaultOpen: true,
+    items: [
+      { id: "systemd", label: "Systemd" },
+      { id: "network", label: "Red" },
+      { id: "power", label: "Energía" },
+    ],
+  },
+  {
+    id: "compositor",
+    label: "Compositor",
+    defaultOpen: true,
+    items: [
+      { id: "hyprland", label: "Hyprland" },
+      { id: "keybindings", label: "Atajos" },
+      { id: "window-rules", label: "Reglas de ventana" },
+    ],
+  },
+  {
+    id: "shell",
+    label: "Shell",
+    defaultOpen: true,
+    items: [
+      { id: "waybar", label: "Waybar" },
+      { id: "rofi", label: "Rofi" },
+    ],
+  },
+  {
+    id: "appearance",
+    label: "Apariencia",
+    defaultOpen: true,
+    items: [
+      { id: "appearance", label: "Apariencia" },
+      { id: "themes", label: "Temas" },
+      { id: "wallpapers", label: "Wallpapers" },
+    ],
+  },
+  {
+    id: "management",
+    label: "Gestión",
+    defaultOpen: true,
+    items: [
+      { id: "snapshots", label: "Snapshots" },
+      { id: "profiles", label: "Perfiles" },
+      { id: "recent_operations", label: "Últimas operaciones" },
+    ],
+  },
 ];
 
 interface SidebarProps {
@@ -33,33 +88,56 @@ interface SidebarProps {
 }
 
 const Sidebar: FC<SidebarProps> = ({ current, onNavigate, backendStatus }) => {
+  const [open, setOpen] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    for (const g of NAV_GROUPS) {
+      init[g.id] = g.defaultOpen;
+    }
+    return init;
+  });
+
+  const toggle = useCallback((id: string) => {
+    setOpen((o) => ({ ...o, [id]: !o[id] }));
+  }, []);
+
   return (
     <nav style={styles.nav}>
       <div style={styles.title}>Control Center</div>
       <ul style={styles.list}>
-        {NAV_ITEMS.map((item) => {
-          const isActive = item.id === current;
+        {NAV_GROUPS.map((group) => {
+          const isOpen = open[group.id] ?? true;
           return (
-            <li key={item.id}>
+            <li key={group.id} style={styles.groupLi}>
               <button
-                style={{
-                  ...styles.item,
-                  ...(isActive ? styles.itemActive : {}),
-                  ...(item.implemented ? {} : styles.itemDisabled),
-                }}
-                onClick={() => {
-                  if (!item.implemented) return;
-                  onNavigate(item.id);
-                }}
-                disabled={!item.implemented}
-                aria-current={isActive ? "page" : undefined}
-                title={!item.implemented ? "Pendiente de implementar" : undefined}
+                type="button"
+                style={styles.groupHeader}
+                onClick={() => toggle(group.id)}
+                aria-expanded={isOpen}
               >
-                <span>{item.label}</span>
-                {!item.implemented && (
-                  <span style={styles.badge}>TODO</span>
-                )}
+                <span style={styles.chev}>{isOpen ? "▼" : "▶"}</span>
+                <span style={styles.groupLabel}>{group.label}</span>
               </button>
+              {isOpen && (
+                <ul style={styles.subList}>
+                  {group.items.map((item) => {
+                    const isActive = item.id === current;
+                    return (
+                      <li key={item.id}>
+                        <button
+                          style={{
+                            ...styles.item,
+                            ...(isActive ? styles.itemActive : {}),
+                          }}
+                          onClick={() => onNavigate(item.id)}
+                          aria-current={isActive ? "page" : undefined}
+                        >
+                          <span>{item.label}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </li>
           );
         })}
@@ -89,7 +167,7 @@ const Sidebar: FC<SidebarProps> = ({ current, onNavigate, backendStatus }) => {
 
 const styles: Record<string, React.CSSProperties> = {
   nav: {
-    width: 200,
+    width: 216,
     minHeight: "100vh",
     background: "#1e2030",
     borderRight: "1px solid #2e3250",
@@ -115,6 +193,36 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "0 8px",
     display: "flex",
     flexDirection: "column",
+    gap: 4,
+  },
+  groupLi: { listStyle: "none" },
+  groupHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    width: "100%",
+    padding: "6px 8px",
+    marginTop: 4,
+    background: "none",
+    border: "none",
+    borderRadius: 6,
+    color: "#6b7280",
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    textAlign: "left",
+  },
+  chev: { fontSize: 9, color: "#4b5563", width: 14 },
+  groupLabel: { flex: 1 },
+  subList: {
+    listStyle: "none",
+    margin: 0,
+    padding: "0 0 4px 4px",
+    display: "flex",
+    flexDirection: "column",
     gap: 2,
   },
   item: {
@@ -122,33 +230,20 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    padding: "8px 12px",
+    padding: "7px 10px",
     background: "none",
     border: "none",
     borderRadius: 6,
     color: "#9ca3af",
-    fontSize: 14,
+    fontSize: 13,
     cursor: "pointer",
     textAlign: "left",
     transition: "background 0.15s, color 0.15s",
+    fontFamily: "inherit",
   },
   itemActive: {
     background: "#2e3250",
     color: "#e2e8f0",
-  },
-  itemDisabled: {
-    opacity: 0.5,
-    cursor: "default",
-  },
-  badge: {
-    fontSize: 10,
-    fontWeight: 600,
-    background: "#374151",
-    color: "#6b7280",
-    borderRadius: 4,
-    padding: "1px 5px",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
   },
   footer: {
     marginTop: "auto",

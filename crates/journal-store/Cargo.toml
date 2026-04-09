@@ -1,0 +1,14 @@
+[package]
+name = "journal-store"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+core-model = { path = "../core-model" }
+thiserror = { workspace = true }
+toml = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

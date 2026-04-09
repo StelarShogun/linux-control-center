@@ -1,18 +1,35 @@
 use std::{
+    collections::HashSet,
     fs,
-    io,
+    io::{self, BufRead, Write},
     path::{Path, PathBuf},
 };
 
 use core_model::{
+    journal::OperationJournalEntry,
     profile::{ProfileId, SettingsProfile},
     settings::AppSettings,
     snapshot::{SnapshotId, SettingsSnapshot},
 };
+use journal_store::JournalStoreError;
+use privileged_helper::WriteTarget;
+use privileged_helper::write_target_for_backup_basename;
 use thiserror::Error;
+use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 use crate::types::SnapshotInfo;
+
+impl From<JournalStoreError> for PersistenceError {
+    fn from(e: JournalStoreError) -> Self {
+        match e {
+            JournalStoreError::Io(e) => PersistenceError::Io(e),
+            JournalStoreError::TomlSerialize(s) => PersistenceError::TomlSerialize(s),
+            JournalStoreError::TomlDeserialize(s) => PersistenceError::TomlDeserialize(s),
+            JournalStoreError::InvalidId(s) => PersistenceError::InvalidId(s),
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum PersistenceError {
@@ -33,6 +50,9 @@ pub enum PersistenceError {
 
     #[error("invalid id (must be lowercase hex and hyphens only): {0}")]
     InvalidId(String),
+
+    #[error("json error: {0}")]
+    Json(String),
 }
 
 /// Validates that an ID only contains characters safe for use as a path component.
@@ -144,6 +164,189 @@ pub fn new_profile_id() -> ProfileId {
 
 pub fn new_snapshot_id() -> SnapshotId {
     Uuid::new_v4().to_string()
+}
+
+/// Identificador único para una entrada del Operation Journal (UUID v4).
+pub fn new_journal_operation_id() -> String {
+    journal_store::new_operation_id()
+}
+
+/// Persiste una entrada del journal en `{base_dir}/journal/{operation_id}.toml`.
+pub fn save_journal_entry(base_dir: &Path, entry: &OperationJournalEntry) -> Result<(), PersistenceError> {
+    journal_store::save_entry(base_dir, entry)?;
+    Ok(())
+}
+
+/// Lista entradas del journal ordenadas por `finished_at` descendente (más recientes primero).
+pub fn list_recent_journal_entries(
+    base_dir: &Path,
+    limit: usize,
+) -> Result<Vec<OperationJournalEntry>, PersistenceError> {
+    Ok(journal_store::list_recent(base_dir, limit)?)
+}
+
+fn backup_registry_path(base_dir: &Path) -> PathBuf {
+    base_dir.join("backup_registry.jsonl")
+}
+
+fn registry_timestamp_utc() -> String {
+    time::OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct BackupRegistryRecord {
+    backup_file_name: String,
+    target: WriteTarget,
+    #[serde(default)]
+    operation_id: Option<String>,
+    registered_at: String,
+    /// `write` | `migration_journal` | `migration_snapshot`
+    source: String,
+}
+
+/// Nombres de backup registrados por LCC (append-only JSONL). Sobrevive a entradas de journal borradas.
+pub fn read_registry_backup_names(base_dir: &Path) -> Result<HashSet<String>, PersistenceError> {
+    let path = backup_registry_path(base_dir);
+    if !path.exists() {
+        return Ok(HashSet::new());
+    }
+    let file = fs::File::open(&path).map_err(PersistenceError::Io)?;
+    let reader = io::BufReader::new(file);
+    let mut out = HashSet::new();
+    for line in reader.lines() {
+        let line = line.map_err(PersistenceError::Io)?;
+        let t = line.trim();
+        if t.is_empty() {
+            continue;
+        }
+        let rec: BackupRegistryRecord =
+            serde_json::from_str(t).map_err(|e| PersistenceError::Json(e.to_string()))?;
+        out.insert(rec.backup_file_name);
+    }
+    Ok(out)
+}
+
+fn append_backup_registry_record(
+    base_dir: &Path,
+    backup_file_name: &str,
+    target: WriteTarget,
+    operation_id: Option<&str>,
+    source: &str,
+) -> Result<(), PersistenceError> {
+    fs::create_dir_all(base_dir)?;
+    let path = backup_registry_path(base_dir);
+    let rec = BackupRegistryRecord {
+        backup_file_name: backup_file_name.to_string(),
+        target,
+        operation_id: operation_id.map(|s| s.to_string()),
+        registered_at: registry_timestamp_utc(),
+        source: source.to_string(),
+    };
+    let mut f = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(PersistenceError::Io)?;
+    let line = serde_json::to_string(&rec).map_err(|e| PersistenceError::Json(e.to_string()))?;
+    writeln!(f, "{line}").map_err(PersistenceError::Io)?;
+    Ok(())
+}
+
+/// Añade al registro persistente un backup creado por LCC (idempotente por nombre).
+pub fn register_lcc_backup_if_new(
+    base_dir: &Path,
+    backup_file_name: &str,
+    target: WriteTarget,
+    operation_id: Option<&str>,
+) -> Result<(), PersistenceError> {
+    let known = read_registry_backup_names(base_dir)?;
+    if known.contains(backup_file_name) {
+        return Ok(());
+    }
+    append_backup_registry_record(base_dir, backup_file_name, target, operation_id, "write")
+}
+
+/// Migra a `backup_registry.jsonl` nombres que ya figuran en journal/snapshots (convención LCC).
+pub fn sync_backup_registry_from_metadata(base_dir: &Path) -> Result<(), PersistenceError> {
+    let mut known = read_registry_backup_names(base_dir)?;
+    for row in journal_store::list_all_entries(base_dir)? {
+        if let Some(b) = row.backup_file_name.filter(|s| !s.is_empty()) {
+            if known.contains(&b) {
+                continue;
+            }
+            let Some(t) = write_target_for_backup_basename(&b) else {
+                continue;
+            };
+            append_backup_registry_record(
+                base_dir,
+                &b,
+                t,
+                Some(row.operation_id.as_str()),
+                "migration_journal",
+            )?;
+            known.insert(b);
+        }
+    }
+    for s in list_snapshots(base_dir)? {
+        if let Some(b) = s.backup_file_name.filter(|s| !s.is_empty()) {
+            if known.contains(&b) {
+                continue;
+            }
+            let Some(t) = write_target_for_backup_basename(&b) else {
+                continue;
+            };
+            append_backup_registry_record(base_dir, &b, t, None, "migration_snapshot")?;
+            known.insert(b);
+        }
+    }
+    Ok(())
+}
+
+/// Conjuntos disjuntos para la UI de auditoría (tras sincronizar registro).
+#[derive(Debug, Clone)]
+pub struct BackupTrackingSets {
+    pub journal: HashSet<String>,
+    pub snapshot: HashSet<String>,
+    pub registry: HashSet<String>,
+}
+
+impl BackupTrackingSets {
+    pub fn tracked_union(&self) -> HashSet<String> {
+        let mut u = HashSet::new();
+        u.extend(self.journal.iter().cloned());
+        u.extend(self.snapshot.iter().cloned());
+        u.extend(self.registry.iter().cloned());
+        u
+    }
+}
+
+pub fn load_backup_tracking_sets(base_dir: &Path) -> Result<BackupTrackingSets, PersistenceError> {
+    sync_backup_registry_from_metadata(base_dir)?;
+    let mut journal = HashSet::new();
+    for row in journal_store::list_all_entries(base_dir)? {
+        if let Some(b) = row.backup_file_name.filter(|s| !s.is_empty()) {
+            journal.insert(b);
+        }
+    }
+    let mut snapshot = HashSet::new();
+    for s in list_snapshots(base_dir)? {
+        if let Some(b) = s.backup_file_name.filter(|s| !s.is_empty()) {
+            snapshot.insert(b);
+        }
+    }
+    let registry = read_registry_backup_names(base_dir)?;
+    Ok(BackupTrackingSets {
+        journal,
+        snapshot,
+        registry,
+    })
+}
+
+/// Unión journal + snapshots + registro (para validar borrado de huérfanos).
+pub fn load_tracked_backup_union(base_dir: &Path) -> Result<HashSet<String>, PersistenceError> {
+    Ok(load_backup_tracking_sets(base_dir)?.tracked_union())
 }
 
 pub fn save_snapshot(
@@ -342,5 +545,6 @@ mod tests {
 
         fs::remove_dir_all(&dir).ok();
     }
+
 }
 

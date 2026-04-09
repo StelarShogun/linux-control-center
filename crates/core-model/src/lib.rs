@@ -1,16 +1,37 @@
 pub mod diff;
 pub mod error;
 pub mod fixture;
+pub mod journal;
 pub mod profile;
 pub mod settings;
 pub mod snapshot;
+pub mod theme;
 pub mod validate;
+pub mod wallpaper;
 
 pub use diff::{compute_diff, DiffEntry, SettingsDiff};
 pub use fixture::FixtureSource;
 pub use error::CoreError;
 pub use profile::{ProfileId, ProfileMetadata, SettingsProfile};
-pub use settings::{AppearanceSettings, AppSettings, HyprlandSettings, RofiSettings, WaybarSettings};
+pub use settings::{
+    AppearanceSettings, AppSettings, HyprlandBind, HyprlandInputSettings, HyprlandKeyboardSettings,
+    HyprlandSettings, HyprlandWindowRule, HyprlandWindowSettings, RofiSettings,
+    WallpaperAppPreferences, WaybarSettings,
+};
+pub use wallpaper::{
+    validate_wallpaper_id, CurrentWallpaperState, WallpaperApplyMode, WallpaperApplyPlan,
+    WallpaperApplyResult, WallpaperBackendStatus, WallpaperCatalogCacheMeta, WallpaperCatalogEntry,
+    WallpaperCollection, WallpaperConfidence, WallpaperEntryFlags, WallpaperFilter, WallpaperId,
+    WallpaperKind, WallpaperMetadata, WallpaperPreview, WallpaperScanStats, WallpaperSource,
+    WallpaperThemeHints,
+};
+pub use theme::{
+    apply_tokens_to_settings, builtin_presets, find_builtin_preset, ThemePreset, ThemePresetSummary,
+    ThemeTokenSet, ThemeVariant,
+};
+pub use journal::{
+    truncate_journal_error, JournalOperationAction, OperationJournalEntry,
+};
 pub use snapshot::{create_snapshot, SettingsSnapshot, SnapshotId, SnapshotInfo};
 pub use validate::validate_settings;
 
@@ -80,5 +101,62 @@ mod tests {
         let toml_str = profile.to_toml_str().expect("serialization failed");
         let restored = SettingsProfile::from_toml_str(&toml_str).expect("deserialization failed");
         assert_eq!(restored.metadata.name, "Test");
+    }
+}
+
+#[cfg(test)]
+mod ts_export {
+    use ts_rs::TS;
+
+    use crate::journal::{JournalOperationAction, OperationJournalEntry};
+    use crate::settings::{
+        AppearanceSettings, AppSettings, HyprlandBind, HyprlandInputSettings, HyprlandKeyboardSettings,
+        HyprlandSettings, HyprlandWindowRule, HyprlandWindowSettings, RofiSettings,
+        WallpaperAppPreferences, WaybarSettings,
+    };
+    use crate::theme::{ThemePreset, ThemePresetSummary, ThemeTokenSet, ThemeVariant};
+    use crate::wallpaper::{
+        CurrentWallpaperState, WallpaperApplyMode, WallpaperApplyPlan, WallpaperApplyResult,
+        WallpaperBackendStatus, WallpaperCatalogCacheMeta, WallpaperCatalogEntry, WallpaperCollection,
+        WallpaperConfidence, WallpaperEntryFlags, WallpaperFilter, WallpaperId, WallpaperKind,
+        WallpaperMetadata, WallpaperPreview, WallpaperScanStats, WallpaperSource,
+    };
+
+    #[test]
+    fn export_bindings() {
+        AppearanceSettings::export().expect("AppearanceSettings");
+        HyprlandBind::export().expect("HyprlandBind");
+        HyprlandKeyboardSettings::export().expect("HyprlandKeyboardSettings");
+        HyprlandWindowRule::export().expect("HyprlandWindowRule");
+        HyprlandWindowSettings::export().expect("HyprlandWindowSettings");
+        HyprlandInputSettings::export().expect("HyprlandInputSettings");
+        HyprlandSettings::export().expect("HyprlandSettings");
+        WaybarSettings::export().expect("WaybarSettings");
+        RofiSettings::export().expect("RofiSettings");
+        WallpaperAppPreferences::export().expect("WallpaperAppPreferences");
+        AppSettings::export().expect("AppSettings");
+        JournalOperationAction::export().expect("JournalOperationAction");
+        OperationJournalEntry::export().expect("OperationJournalEntry");
+        ThemeVariant::export().expect("ThemeVariant");
+        ThemeTokenSet::export().expect("ThemeTokenSet");
+        ThemePreset::export().expect("ThemePreset");
+        ThemePresetSummary::export().expect("ThemePresetSummary");
+        WallpaperId::export().expect("WallpaperId");
+        WallpaperSource::export().expect("WallpaperSource");
+        WallpaperKind::export().expect("WallpaperKind");
+        WallpaperEntryFlags::export().expect("WallpaperEntryFlags");
+        WallpaperMetadata::export().expect("WallpaperMetadata");
+        WallpaperPreview::export().expect("WallpaperPreview");
+        WallpaperCatalogEntry::export().expect("WallpaperCatalogEntry");
+        WallpaperApplyMode::export().expect("WallpaperApplyMode");
+        WallpaperApplyPlan::export().expect("WallpaperApplyPlan");
+        WallpaperApplyResult::export().expect("WallpaperApplyResult");
+        WallpaperBackendStatus::export().expect("WallpaperBackendStatus");
+        WallpaperConfidence::export().expect("WallpaperConfidence");
+        CurrentWallpaperState::export().expect("CurrentWallpaperState");
+        WallpaperFilter::export().expect("WallpaperFilter");
+        WallpaperScanStats::export().expect("WallpaperScanStats");
+        WallpaperCollection::export().expect("WallpaperCollection");
+        WallpaperCatalogCacheMeta::export().expect("WallpaperCatalogCacheMeta");
     }
 }

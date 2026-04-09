@@ -1,10 +1,12 @@
 pub mod adapter;
 pub mod reader;
+pub mod reload;
 pub mod types;
 
-pub use adapter::{export_from_settings, load_fixture};
+pub use adapter::{export_from_settings, export_style_from_settings, load_fixture};
 pub use reader::read_from_system;
-pub use types::{FixtureSource, WaybarExportResult, WaybarFixtureResult};
+pub use reload::reload_waybar;
+pub use types::{FixtureSource, ReloadOutput, WaybarExportResult, WaybarFixtureResult};
 
 #[cfg(test)]
 mod tests {
@@ -27,5 +29,13 @@ mod tests {
         assert!(result.content.contains("\"position\": \"top\""));
         assert!(result.content.contains("\"height\": 32"));
         assert!(result.content.contains("clock"));
+    }
+
+    #[test]
+    fn export_style_contains_theme_colors() {
+        let settings = WaybarSettings::default();
+        let css = export_style_from_settings(&settings);
+        assert!(css.content.contains(&settings.bar_background));
+        assert!(css.content.contains(&settings.accent));
     }
 }

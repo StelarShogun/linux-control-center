@@ -57,6 +57,7 @@ pub fn compute_diff(old: &AppSettings, new: &AppSettings) -> SettingsDiff {
     section_diff!(hyprland, "hyprland");
     section_diff!(waybar, "waybar");
     section_diff!(rofi, "rofi");
+    section_diff!(wallpaper, "wallpaper");
 
     SettingsDiff { entries }
 }

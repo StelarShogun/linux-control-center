@@ -15,3 +15,12 @@ pub struct WaybarExportResult {
     /// Contenido generado para config.jsonc.
     pub content: String,
 }
+
+/// Resultado de pedir a Waybar que recargue la configuración (`SIGUSR2`).
+#[derive(Debug, Clone)]
+pub struct ReloadOutput {
+    /// `true` si `pkill -USR2 waybar` devolvió exit code 0 (al menos un proceso recibió la señal).
+    pub ok: bool,
+    /// stdout + stderr combinados, útil si falla o no hay proceso `waybar`.
+    pub output: String,
+}

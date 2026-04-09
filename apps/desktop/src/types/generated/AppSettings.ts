@@ -2,9 +2,14 @@
 import type { AppearanceSettings } from "./AppearanceSettings";
 import type { HyprlandSettings } from "./HyprlandSettings";
 import type { RofiSettings } from "./RofiSettings";
+import type { WallpaperAppPreferences } from "./WallpaperAppPreferences";
 import type { WaybarSettings } from "./WaybarSettings";
 
 /**
  * Configuración completa de la aplicación.
  */
-export type AppSettings = { appearance: AppearanceSettings, hyprland: HyprlandSettings, waybar: WaybarSettings, rofi: RofiSettings, };
+export type AppSettings = { appearance: AppearanceSettings, hyprland: HyprlandSettings, waybar: WaybarSettings, rofi: RofiSettings, 
+/**
+ * Omisión en `settings.toml` legados → `Default`.
+ */
+wallpaper: WallpaperAppPreferences, };

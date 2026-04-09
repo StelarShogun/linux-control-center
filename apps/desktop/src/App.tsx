@@ -1,12 +1,20 @@
 import { useEffect, useState, type FC } from "react";
 import Sidebar, { type Page } from "./components/Sidebar";
+import SearchBar from "./components/SearchBar";
 import AppearancePage from "./pages/AppearancePage";
 import HyprlandPage from "./pages/HyprlandPage";
 import WaybarPage from "./pages/WaybarPage";
 import RofiPage from "./pages/RofiPage";
+import ThemeManagerPage from "./pages/ThemeManagerPage";
+import WallpapersPage from "./pages/WallpapersPage";
 import SystemdPage from "./pages/SystemdPage";
 import SnapshotsPage from "./pages/SnapshotsPage";
 import ProfilesPage from "./pages/ProfilesPage";
+import RecentOperationsPage from "./pages/RecentOperationsPage";
+import NetworkPage from "./pages/NetworkPage";
+import PowerPage from "./pages/PowerPage";
+import KeybindingsPage from "./pages/KeybindingsPage";
+import WindowRulesPage from "./pages/WindowRulesPage";
 import { defaultSettings, type AppSettings } from "./types/settings";
 import type { BackendStatus } from "./types/backend";
 import { getCurrentSettings, importSystemSettings, saveSettings } from "./tauri/api";
@@ -63,6 +71,7 @@ const App: FC = () => {
       />
       <div style={styles.content}>
         <div style={styles.toolbar}>
+          <SearchBar onNavigate={setCurrentPage} disabled={backendStatus !== "ready"} />
           <button
             style={{
               ...styles.syncBtn,
@@ -121,6 +130,22 @@ const PageRouter: FC<{
           backendStatus={backendStatus}
         />
       );
+    case "keybindings":
+      return (
+        <KeybindingsPage
+          settings={settings}
+          onSettingsChange={onSettingsChange}
+          backendStatus={backendStatus}
+        />
+      );
+    case "window-rules":
+      return (
+        <WindowRulesPage
+          settings={settings}
+          onSettingsChange={onSettingsChange}
+          backendStatus={backendStatus}
+        />
+      );
     case "waybar":
       return (
         <WaybarPage
@@ -137,8 +162,22 @@ const PageRouter: FC<{
           backendStatus={backendStatus}
         />
       );
+    case "themes":
+      return (
+        <ThemeManagerPage
+          settings={settings}
+          onSettingsChange={onSettingsChange}
+          backendStatus={backendStatus}
+        />
+      );
+    case "wallpapers":
+      return <WallpapersPage backendStatus={backendStatus} />;
     case "systemd":
       return <SystemdPage backendStatus={backendStatus} />;
+    case "network":
+      return <NetworkPage backendStatus={backendStatus} />;
+    case "power":
+      return <PowerPage backendStatus={backendStatus} />;
     case "snapshots":
       return (
         <SnapshotsPage
@@ -155,6 +194,8 @@ const PageRouter: FC<{
           backendStatus={backendStatus}
         />
       );
+    case "recent_operations":
+      return <RecentOperationsPage backendStatus={backendStatus} />;
     default: {
       const _exhaustive: never = current;
       return _exhaustive;
@@ -184,6 +225,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#1e2130",
     borderBottom: "1px solid #2d3148",
     flexShrink: 0,
+    flexWrap: "wrap",
   },
   syncBtn: {
     padding: "6px 14px",

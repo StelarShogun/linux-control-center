@@ -5,60 +5,68 @@ use crate::types::{FixtureSource, RofiExportResult, RofiFixtureResult};
 /// Contenido del fixture embebido en el binario.
 const FIXTURE_CONTENT: &str = include_str!("../../../fixtures/rofi/config.rasi");
 
-/// Bloques visuales estáticos con paleta Nord.
-///
-/// LIMITATION: Los colores son fijos en esta fase.
-/// En una fase futura podrían derivarse de AppearanceSettings.
-const VISUAL_BLOCKS: &str = r#"
-* {
-    bg:     #2e3440;
-    fg:     #d8dee9;
-    accent: #88c0d0;
-    border: #4c566a;
+fn visual_block_from_settings(s: &RofiSettings) -> String {
+    let el_r = (s.border_radius / 2).clamp(2, 12);
+    format!(
+        r#"
+* {{
+    bg:     {bg};
+    fg:     {fg};
+    accent: {accent};
+    border: {border};
 
     background-color: transparent;
     text-color:       @fg;
-}
+}}
 
-window {
+window {{
     background-color: @bg;
     border:           2px solid @border;
-    border-radius:    8px;
+    border-radius:    {br}px;
     width:            480px;
-}
+}}
 
-inputbar {
+inputbar {{
     children:         [prompt, entry];
-    background-color: #3b4252;
+    background-color: {input_bg};
     border-radius:    6px;
     padding:          6px 10px;
     margin:           8px;
-}
+}}
 
-prompt {
+prompt {{
     text-color: @accent;
     margin:     0 8px 0 0;
-}
+}}
 
-entry {
+entry {{
     placeholder: "Search…";
-}
+}}
 
-listview {
+listview {{
     padding:    4px 8px;
     scrollbar:  false;
-}
+}}
 
-element {
+element {{
     padding:       6px 8px;
-    border-radius: 4px;
-}
+    border-radius: {el_r}px;
+}}
 
-element selected {
+element selected {{
     background-color: @accent;
     text-color:       @bg;
+}}
+"#,
+        bg = s.vis_bg,
+        fg = s.vis_fg,
+        accent = s.vis_accent,
+        border = s.vis_border,
+        br = s.border_radius,
+        input_bg = s.vis_input_bg,
+        el_r = el_r,
+    )
 }
-"#;
 
 /// Carga el fixture de Rofi desde el binario.
 ///
@@ -73,10 +81,8 @@ pub fn load_fixture() -> RofiFixtureResult {
 
 /// Genera el contenido de config.rasi a partir de `RofiSettings`.
 ///
-/// LIMITATION: Solo genera el bloque `configuration {}` a partir de los campos del
-/// core-model. Los bloques visuales son estáticos (paleta Nord fija).
-/// No escribe en disco. No recarga Rofi.
-/// El campo `theme` queda reservado para una fase futura con `@theme`.
+/// Genera `configuration {{}}` y bloques visuales a partir de `RofiSettings`
+/// (colores en `vis_*` y `border_radius`).
 pub fn export_from_settings(s: &RofiSettings) -> RofiExportResult {
     let show_icons = if s.show_icons { "true" } else { "false" };
 
@@ -98,6 +104,6 @@ pub fn export_from_settings(s: &RofiSettings) -> RofiExportResult {
     lines.push(format!("    font:               \"{}\";", s.font));
     lines.push("}".into());
 
-    let content = lines.join("\n") + "\n" + VISUAL_BLOCKS;
+    let content = lines.join("\n") + "\n" + &visual_block_from_settings(s);
     RofiExportResult { content }
 }

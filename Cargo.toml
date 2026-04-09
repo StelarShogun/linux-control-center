@@ -1,11 +1,16 @@
 [workspace]
 members = [
   "crates/core-model",
+  "crates/journal-store",
   "crates/adapters-hyprland",
   "crates/adapters-waybar",
   "crates/adapters-rofi",
   "crates/adapters-systemd",
+  "crates/adapters-network",
+  "crates/adapters-power",
   "crates/privileged-helper",
+  "crates/wallpaper-catalog",
+  "crates/wallpaper-engine-adapter",
   "apps/desktop/src-tauri",
 ]
 resolver = "3"
@@ -24,4 +29,4 @@ zbus = "4"
 notify = "8"
 uuid = { version = "1", features = ["v4"] }
 ts-rs = { version = "10", features = ["serde-compat"] }
-time = { version = "0.3", features = ["formatting"] }
+time = { version = "0.3", features = ["formatting", "macros"] }

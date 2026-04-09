@@ -1,0 +1,9 @@
+[package]
+name = "adapters-network"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+ts-rs = { workspace = true }

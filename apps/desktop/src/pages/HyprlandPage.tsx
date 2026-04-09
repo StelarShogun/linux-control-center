@@ -1,12 +1,16 @@
 import { useEffect, useState, type FC } from "react";
-import type { AppSettings, HyprlandSettings } from "../types/settings";
+import type { AppSettings, HyprlandInputSettings, HyprlandSettings } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
 import {
   applyConfigToRealPath,
   applyConfigToSandbox,
   applyLiveHyprland,
+  inspectHyprlandSetup,
+  repairHyprlandMainInclude,
   previewHyprlandConfig,
   saveSettings,
+  type HyprlandMigrationStatus,
+  type HyprlandSetupState,
 } from "../tauri/api";
 import type { ApplyLiveResult, ApplyToRealPathResult } from "../tauri/types";
 import OpMessage, { type OpMsg } from "../components/OpMessage";
@@ -26,6 +30,9 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
   const [sandboxResult, setSandboxResult] = useState<{ path: string; snapshotId: string } | null>(null);
   const [realResult, setRealResult] = useState<ApplyToRealPathResult | null>(null);
   const [liveResult, setLiveResult] = useState<ApplyLiveResult | null>(null);
+  const [migrationStatus, setMigrationStatus] = useState<HyprlandMigrationStatus | null>(null);
+  const [repairingInclude, setRepairingInclude] = useState(false);
+  const [inputSectionOpen, setInputSectionOpen] = useState(false);
 
   const startOp = (label: string) => {
     setBusy(true);
@@ -44,6 +51,13 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
       .catch(() => setConfigPreview(null));
   }, [backendStatus, settings.hyprland]);
 
+  useEffect(() => {
+    if (backendStatus !== "ready") return;
+    inspectHyprlandSetup()
+      .then(setMigrationStatus)
+      .catch(() => setMigrationStatus(null));
+  }, [backendStatus]);
+
   const local = settings.hyprland;
   const update = <K extends keyof HyprlandSettings>(
     key: K,
@@ -52,6 +66,18 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
     onSettingsChange({
       ...settings,
       hyprland: { ...settings.hyprland, [key]: value },
+    });
+
+  const updateInput = <K extends keyof HyprlandInputSettings>(
+    key: K,
+    value: HyprlandInputSettings[K]
+  ) =>
+    onSettingsChange({
+      ...settings,
+      hyprland: {
+        ...settings.hyprland,
+        input: { ...settings.hyprland.input, [key]: value },
+      },
     });
 
   return (
@@ -69,6 +95,29 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
           Backend no disponible. Ejecuta la app con Tauri para usar todas las funciones.
         </div>
       )}
+
+      {migrationStatus && <MigrationBanner
+        status={migrationStatus}
+        onRepair={async () => {
+          setRepairingInclude(true);
+          try {
+            const inserted = await repairHyprlandMainInclude();
+            const refreshed = await inspectHyprlandSetup();
+            setMigrationStatus(refreshed);
+            setMessage({
+              kind: "success",
+              text: inserted
+                ? "Include gestionado insertado en hyprland.conf."
+                : "El include ya estaba presente.",
+            });
+          } catch (e) {
+            setMessage({ kind: "error", text: `Error al reparar include: ${String(e)}` });
+          } finally {
+            setRepairingInclude(false);
+          }
+        }}
+        repairing={repairingInclude}
+      />}
 
       <section style={styles.section}>
         <h2 style={styles.sectionTitle}>Gaps & Borders</h2>
@@ -154,6 +203,76 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
         />
       </section>
 
+      <section style={styles.section}>
+        <button
+          type="button"
+          onClick={() => setInputSectionOpen((o) => !o)}
+          style={styles.collapser}
+        >
+          <h2 style={{ ...styles.sectionTitle, margin: 0 }}>Input (teclado y puntero)</h2>
+          <span style={styles.chev}>{inputSectionOpen ? "▼" : "▶"}</span>
+        </button>
+        {inputSectionOpen && (
+          <div style={styles.inputBlock}>
+            <div style={styles.field}>
+              <label style={styles.label}>Keyboard layout</label>
+              <input
+                type="text"
+                style={styles.textIn}
+                value={local.input.kb_layout}
+                onChange={(e) => updateInput("kb_layout", e.target.value)}
+              />
+            </div>
+            <div style={styles.field}>
+              <label style={styles.label}>Keyboard variant</label>
+              <input
+                type="text"
+                style={styles.textIn}
+                value={local.input.kb_variant}
+                onChange={(e) => updateInput("kb_variant", e.target.value)}
+              />
+            </div>
+            <div style={styles.field}>
+              <label style={styles.label}>Keyboard options</label>
+              <input
+                type="text"
+                style={styles.textIn}
+                value={local.input.kb_options}
+                onChange={(e) => updateInput("kb_options", e.target.value)}
+              />
+            </div>
+            <div style={styles.field}>
+              <label style={styles.label}>
+                Sensibilidad del ratón ({local.input.mouse_sensitivity.toFixed(2)})
+              </label>
+              <div style={styles.control}>
+                <input
+                  type="range"
+                  min={-1}
+                  max={1}
+                  step={0.05}
+                  value={local.input.mouse_sensitivity}
+                  onChange={(e) =>
+                    updateInput("mouse_sensitivity", parseFloat(e.target.value) || 0)
+                  }
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+            <BoolField
+              label="Natural scroll (ratón)"
+              value={local.input.natural_scroll}
+              onChange={(v) => updateInput("natural_scroll", v)}
+            />
+            <BoolField
+              label="Natural scroll (touchpad)"
+              value={local.input.touchpad_natural_scroll}
+              onChange={(v) => updateInput("touchpad_natural_scroll", v)}
+            />
+          </div>
+        )}
+      </section>
+
       <div style={styles.actionRow}>
         <button
           style={styles.saveBtn}
@@ -219,7 +338,10 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
 
         <button
           style={styles.saveBtnGreen}
-          disabled={backendStatus !== "ready" || busy}
+          disabled={backendStatus !== "ready" || busy || isApplyLiveBlocked(migrationStatus?.state)}
+          title={isApplyLiveBlocked(migrationStatus?.state)
+            ? applyLiveBlockReason(migrationStatus?.state)
+            : undefined}
           onClick={async () => {
             if (!window.confirm("Apply live\n\nEscribe ~/.config/hypr/generated/linux-control-center.conf y ejecuta hyprctl reload.\nSe hace backup del archivo anterior antes de sobrescribir.")) return;
             startOp("Apply live");
@@ -288,6 +410,106 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
           <pre style={styles.preview}>{configPreview}</pre>
         </div>
       )}
+    </div>
+  );
+};
+
+// ─── Helpers para el bloqueo de Apply live ────────────────────────────────────
+
+function isApplyLiveBlocked(state: HyprlandSetupState | undefined): boolean {
+  if (!state) return false;
+  return state.type === "MainFileNotFound" || state.type === "LegacyGeneratedDetected";
+}
+
+function applyLiveBlockReason(state: HyprlandSetupState | undefined): string {
+  if (!state) return "";
+  if (state.type === "MainFileNotFound")
+    return "hyprland.conf no encontrado. Crea el archivo antes de aplicar en vivo.";
+  if (state.type === "LegacyGeneratedDetected")
+    return "Instalación antigua detectada. Usa un backup para restaurar hyprland.conf antes de continuar.";
+  return "";
+}
+
+// ─── MigrationBanner ──────────────────────────────────────────────────────────
+
+interface MigrationBannerProps {
+  status: HyprlandMigrationStatus;
+  onRepair: () => void;
+  repairing: boolean;
+}
+
+const MigrationBanner: FC<MigrationBannerProps> = ({ status, onRepair, repairing }) => {
+  const { state, available_backups, warnings } = status;
+
+  if (state.type === "ManagedIncludePresent") return null;
+
+  let bannerStyle = { ...styles.migrationBanner };
+  let title = "";
+  let body: React.ReactNode = null;
+
+  if (state.type === "ManagedIncludeAbsent") {
+    bannerStyle = { ...bannerStyle, ...styles.migrationBannerAmber };
+    title = "Include gestionado ausente";
+    body = (
+      <>
+        <span style={styles.migrationBannerText}>
+          El include de LCC no está en <code>hyprland.conf</code>.
+          Apply live funcionará pero no se aplicarán los cambios hasta repararlo.
+        </span>
+        <button
+          style={styles.migrationBannerBtn}
+          onClick={onRepair}
+          disabled={repairing}
+        >
+          {repairing ? "Reparando…" : "Reparar include"}
+        </button>
+      </>
+    );
+  } else if (state.type === "LegacyGeneratedDetected") {
+    bannerStyle = { ...bannerStyle, ...styles.migrationBannerRed };
+    title = "Instalación antigua detectada";
+    body = (
+      <>
+        <span style={styles.migrationBannerText}>
+          <code>hyprland.conf</code> fue generado completamente por una versión antigua de LCC.
+          Apply live está bloqueado hasta que restaures manualmente desde un backup.
+        </span>
+        {available_backups.length > 0 && (
+          <div style={styles.migrationBackupList}>
+            <span style={{ fontSize: 11, color: "#9ca3af" }}>Backups disponibles:</span>
+            {available_backups.slice(0, 5).map((bak) => (
+              <code key={bak} style={styles.migrationBackupItem}>{bak}</code>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  } else if (state.type === "NonStandardSetup") {
+    bannerStyle = { ...bannerStyle, ...styles.migrationBannerAmber };
+    title = "Setup no estándar detectado";
+    body = (
+      <span style={styles.migrationBannerText}>
+        {state.reason}. Apply live puede funcionar con limitaciones.
+      </span>
+    );
+  } else if (state.type === "MainFileNotFound") {
+    bannerStyle = { ...bannerStyle };
+    title = "hyprland.conf no encontrado";
+    body = (
+      <span style={styles.migrationBannerText}>
+        No se encontró <code>~/.config/hypr/hyprland.conf</code>.
+        Apply live está bloqueado hasta que el archivo exista.
+      </span>
+    );
+  }
+
+  return (
+    <div style={bannerStyle}>
+      <strong style={styles.migrationBannerTitle}>{title}</strong>
+      {body}
+      {warnings.map((w, i) => (
+        <div key={i} style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>{w}</div>
+      ))}
     </div>
   );
 };
@@ -396,6 +618,31 @@ const styles: Record<string, React.CSSProperties> = {
     paddingBottom: 6,
     borderBottom: "1px solid #2e3250",
   },
+  collapser: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: 0,
+    marginBottom: 12,
+    fontFamily: "inherit",
+  },
+  chev: { fontSize: 12, color: "#6b7280", marginLeft: 8 },
+  inputBlock: { paddingTop: 8, borderTop: "1px solid #2e3250" },
+  textIn: {
+    flex: 1,
+    padding: "6px 10px",
+    borderRadius: 6,
+    border: "1px solid #3d4466",
+    background: "#151722",
+    color: "#e2e8f0",
+    fontSize: 13,
+    fontFamily: "inherit",
+    maxWidth: 320,
+  },
   field: { display: "flex", alignItems: "center", gap: 16, marginBottom: 12 },
   label: { width: 140, fontSize: 13, color: "#9ca3af", flexShrink: 0 },
   control: { display: "flex", alignItems: "center", gap: 8 },
@@ -409,6 +656,60 @@ const styles: Record<string, React.CSSProperties> = {
   saveBtnNeutral: { ...BTN_BASE, background: "#1e2030", borderColor: "#2e3250", color: "#9ca3af" },
   saveBtnAmber: { ...BTN_BASE, background: "#1a1500", borderColor: "#4a3f20", color: "#fbbf24" },
   saveBtnGreen: { ...BTN_BASE, background: "#0b1f1a", borderColor: "#1a3a2a", color: "#6ee7b7" },
+  migrationBanner: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 8,
+    fontSize: 12,
+    background: "#151722",
+    border: "1px solid #2e3250",
+    borderRadius: 8,
+    padding: "10px 14px",
+    marginBottom: 20,
+  },
+  migrationBannerAmber: {
+    background: "#1a1500",
+    borderColor: "#4a3f20",
+    color: "#fbbf24",
+  },
+  migrationBannerRed: {
+    background: "#1f0b0b",
+    borderColor: "#3a1f1f",
+    color: "#fca5a5",
+  },
+  migrationBannerTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  migrationBannerText: {
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: "#d1d5db",
+  },
+  migrationBannerBtn: {
+    alignSelf: "flex-start" as const,
+    background: "#2a1e00",
+    border: "1px solid #4a3f20",
+    borderRadius: 6,
+    color: "#fbbf24",
+    fontSize: 12,
+    padding: "5px 10px",
+    cursor: "pointer",
+  },
+  migrationBackupList: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 2,
+    marginTop: 4,
+  },
+  migrationBackupItem: {
+    fontSize: 11,
+    color: "#9ca3af",
+    background: "#1e1e2e",
+    borderRadius: 4,
+    padding: "1px 4px",
+    fontFamily: "monospace",
+  },
   previewContainer: { marginTop: 24 },
   previewLabel: {
     fontSize: 11,

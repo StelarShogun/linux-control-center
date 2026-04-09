@@ -331,7 +331,7 @@ catálogo cerrado, allowlist compilada y sin ejecución arbitraria.
 | `restore_from_backup(target_path, backup_file_name)` | Restaura solo desde basename; reconstruye ruta internamente |
 | `ensure_managed_include(main_file, include_file, marker)` | Inserta idempotentemente un `source` en el archivo principal |
 | `reload_hyprland()` | Ejecuta `hyprctl reload`; devuelve `{ ok, output }` |
-| `reload_waybar()` | Futuro (Fase F) |
+| `reload_waybar()` | Implementado en `adapters-waybar`: `pkill -USR2 waybar` (sin shell); ver `apply_live_waybar` |
 
 ### Operaciones explícitamente prohibidas
 
@@ -360,10 +360,16 @@ Los tipos de entrada y salida de cada familia están generados a TypeScript via 
 | `apply_config_to_sandbox` | User-facing | No toca sistema real |
 | `apply_config_to_real_path` | User-facing | Escribe con backup atómico; crea snapshot |
 | `apply_live_hyprland` | User-facing | Write + `hyprctl reload` con estado separado |
+| `apply_live_waybar` | User-facing | Write `config.jsonc` + `pkill -USR2 waybar`; write/reload separados (ADR-002) |
 | `rollback_full_state` | **User-facing (canónica)** | Rollback consistente (archivo + settings) |
 | `rollback_config_file` | Internal/legacy | Solo archivo; puede dejar UI desincronizada |
 | `list_systemd_units` | User-facing | Solo lectura |
 | `get_systemd_unit` | User-facing | Solo lectura |
+| `list_theme_presets` | User-facing | Solo lectura |
+| `get_theme_preview` | User-facing | Solo lectura |
+| `apply_theme` | User-facing | Escritura real multi-destino + snapshots |
+| `audit_config_backups` | User-facing | Solo lectura: cruza `*.bak.*` allowlist ↔ journal/snapshots + `backup_registry.jsonl` |
+| `delete_orphan_backup` | User-facing | Borra un backup huérfano (basename + `WriteTarget`); validación + `dry_run` |
 
 ### Settings API
 
@@ -376,6 +382,14 @@ Los tipos de entrada y salida de cada familia están generados a TypeScript via 
 | `preview_waybar_config` | — | `string` |
 | `preview_rofi_config` | — | `string` |
 
+### Theme API (Fase D)
+
+| Comando | Entrada | Salida |
+|---|---|---|
+| `list_theme_presets` | — | `ThemePresetSummary[]` |
+| `get_theme_preview` | `{ preset_id, variant }` | `{ hyprland, waybar_jsonc, waybar_css, rofi }` |
+| `apply_theme` | flags por destino + `reload_hyprland?` | `ThemeApplyResult` (por destino + `pre_snapshot_id`) |
+
 ### Apply API
 
 | Comando | Entrada | Salida |
@@ -383,7 +397,16 @@ Los tipos de entrada y salida de cada familia están generados a TypeScript via 
 | `apply_config_to_sandbox` | `{ target, snapshot_label? }` | `{ snapshot, write }` |
 | `apply_config_to_real_path` | `{ target, snapshot_label? }` | `{ snapshot, write, backup_file_name? }` |
 | `apply_live_hyprland` | `{ snapshot_label? }` | `{ snapshot, write, reload_ok, reload_output }` |
+| `apply_live_waybar` | `{ snapshot_label? }` | `{ snapshot, write, reload_ok, reload_output }` (misma forma que Hyprland live) |
 | `rollback_full_state` | `{ backup_file_name, target }` | `{ snapshot_id, restored_settings }` |
+
+### Observabilidad / backups
+
+| Comando | Entrada | Salida |
+|---|---|---|
+| `list_recent_operations` | `limit?` | `OperationJournalEntry[]` |
+| `audit_config_backups` | — | `BackupAuditReport` (journal ∪ snapshots ∪ registro; `target` opcional si resolución heurística) |
+| `delete_orphan_backup` | `{ target, backup_file_name, dry_run }` | `{ dry_run, deleted, path }` |
 
 #### Operaciones user-facing vs internal-only
 
@@ -408,12 +431,34 @@ Los tipos de entrada y salida de cada familia están generados a TypeScript via 
 | `list_systemd_units` | Lista unidades con filtros; fallback a fixture si D-Bus no disponible |
 | `get_systemd_unit` | Consulta unidad concreta; requiere D-Bus real |
 
-### APIs futuras
+### Wallpaper API (Fase E)
 
-| Familia | Fase | Comandos |
+El módulo de wallpapers descubre entradas solo bajo **raíces allowlist** (`wallpaper-catalog`), aplica vía un **binario externo** documentado (`wallpaper-engine-adapter`), y **no** expone rutas absolutas al frontend: la UI solo envía `WallpaperId` opacos. Los tipos viven en `core-model` (`wallpaper`); Tauri orquesta caché en disco, journal y snapshot ligero tras apply exitoso.
+
+| Comando | Entrada | Salida |
 |---|---|---|
-| Theme API | D | `list_themes`, `preview_theme`, `apply_theme` |
-| Wallpaper API | E | `list_wallpapers`, `preview_wallpaper`, `apply_wallpaper` |
+| `list_wallpapers` | `{ filter?: WallpaperFilter, limit?: u32 }` | `WallpaperCollection` |
+| `refresh_wallpaper_catalog` | — | `WallpaperCollection` (rescan + persistencia de caché) |
+| `get_wallpaper_preview` | `{ id: string }` (id validado como `WallpaperId`) | `WallpaperPreview` (imagen inline base64 o `unavailable`) |
+| `get_current_wallpaper` | — | `CurrentWallpaperState` |
+| `get_wallpaper_backend_status` | — | `WallpaperBackendStatus` |
+| `apply_wallpaper` | `{ id: string }` | `WallpaperApplyResult` |
+
+**Invariantes**
+
+- **I-1 (wallpaper):** el frontend nunca envía paths; solo ids emitidos por el backend al listar/refrescar.
+- **I-7:** `CurrentWallpaperState.confidence` distingue lo que sabe la app (`last_applied_by_app`) de lo que opcionalmente reporta el helper CLI.
+
+**Persistencia relacionada**
+
+- Catálogo en caché: `{appDataDir}/cache/wallpaper_catalog.json` (metadatos + filas serializables sin exponer paths al TS; resolución en runtime en Tauri).
+- Preferencias: `AppSettings.wallpaper` (`last_applied_wallpaper_id`, `last_successful_apply_at`) en `settings.toml`.
+- Journal: acción `apply_wallpaper` en `OperationJournalEntry`.
+
+**Crates**
+
+- `crates/wallpaper-catalog` — scan allowlisted, orden, límite de entradas, fixtures de test.
+- `crates/wallpaper-engine-adapter` — detección del binario, `apply`, `current` (mockable). Ver `crates/wallpaper-engine-adapter/README.md`.
 
 ---
 
@@ -460,7 +505,7 @@ Esquema de cada entrada:
 OperationJournalEntry {
     operation_id:    UUID v4
     target:          WriteTarget
-    action:          "apply_sandbox" | "apply_real" | "apply_live" | "rollback"
+    action:          "apply_sandbox" | "apply_real" | "apply_live" | "apply_live_waybar" | "apply_theme" | "apply_wallpaper" | "rollback"
     started_at:      RFC3339
     finished_at:     RFC3339
     success:         bool
@@ -571,19 +616,24 @@ Esa pantalla es la herramienta principal de depuración del usuario sin necesida
 - Pendiente: endurecer la frontera eliminando o restringiendo `WriteTarget::HyprlandMainConfig` a solo inserción idempotente (sin overwrite completo)
 - Pendiente: mejorar migración/recuperación con UI guiada (ver “Migration & Recovery Strategy”)
 
-### Fase C — Operation Journal + UI "últimas operaciones"
+### Fase C — Operation Journal + UI "últimas operaciones" *(implementado)*
 
-- Implementar `OperationJournalEntry` en `core-model`
-- Persistir entradas en `{appDataDir}/journal/`
-- Nuevo comando `list_recent_operations`
-- Pantalla "Últimas operaciones" en la UI
+- `OperationJournalEntry` + `JournalOperationAction` en `core-model` (`journal.rs`), export TS
+- Persistencia en `{appDataDir}/journal/{operation_id}.toml` (TOML por entrada); lógica reutilizable en crate `journal-store` (tests sin Tauri)
+- Registro en journal: `apply_config_to_sandbox`, `apply_config_to_real_path`, `apply_live_hyprland`, `apply_live_waybar`, `apply_theme`, `rollback_full_state` (éxito y error; fallo de persistencia del journal solo `log::warn`); además `backup_registry.jsonl` tras writes con backup (`apply_config_to_real_path`, live Hyprland/Waybar, cada destino OK de `apply_theme`)
+- `backup_registry.jsonl` (append-only en app data): backups creados por LCC + migración desde journal/snapshots con convención de nombre; evita falsos huérfanos si se purga el journal
+- Comando `list_recent_operations` (límite opcional, máx. 500; default 100)
+- Comando `audit_config_backups`: escaneo de `*.bak.*` bajo allowlist + cruce con journal, snapshots y registro; heurística `resolve_target_if_backup_file_exists` si el prefijo no parsea
+- Comando `delete_orphan_backup`: validación de basename, confinamiento, comprobación de que el archivo no esté en el conjunto «tracked»
+- Pantalla "Últimas operaciones" en la UI (sidebar): filtros, búsqueda local, auditoría de backups y borrado guiado (dry-run + confirmación) para huérfanos con `target` conocido
 
-### Fase D — Theme Manager
+### Fase D — Theme Manager *(implementado — alcance v1)*
 
-- Tokens visuales compartidos: colores, radios, blur, opacidad, tipografías, spacing
-- Tipos: `ThemeTokenSet`, `ThemePreset`, `ThemeVariant`, `ThemeMappingResult`
-- Aplicación cross-subsistema: Hyprland include + Waybar config/style + Rofi theme
-- Los adapters generan artefactos; el Theme Manager no edita archivos directamente
+- `crates/core-model/src/theme.rs`: presets builtin (`nord`, `graphite`), `apply_tokens_to_settings`, `ThemeVariant` dark/light
+- `WriteTarget::WaybarStyle` → `~/.config/waybar/style.css`; Hyprland/Rofi/Waybar JSON siguen en adapters
+- Comandos Tauri: `list_theme_presets`, `get_theme_preview`, `apply_theme` (snapshot previo `theme:before:…`, snapshot por destino, resultado parcial por subsistema, `reload_hyprland` opcional)
+- Journal: `JournalOperationAction::ApplyTheme`
+- UI: página **Temas** en el sidebar
 
 ### Fase E — Wallpaper module
 
@@ -591,16 +641,45 @@ Esa pantalla es la herramienta principal de depuración del usuario sin necesida
 - `crates/wallpaper-engine-adapter`: wrapper del backend existente
 - Integración con theme sync (wallpaper → palette → tokens)
 
-### Fase F — Waybar live apply
+### Fase F — Waybar live apply *(implementado)*
 
-- Solo cuando `reload_waybar()` tenga una ruta segura y documentada en el entorno real
-- No mezclar con Hyprland live en la misma fase de desarrollo
+- `crates/adapters-waybar/src/reload.rs`: `reload_waybar()` → `pkill -USR2 waybar` (argumentos fijos, sin shell)
+- Comando Tauri `apply_live_waybar`: valida settings → export JSONC → `execute_write(WaybarConfig)` → snapshot ligado al backup → reload → `ApplyLiveResult` (misma forma que `apply_live_hyprland`)
+- Journal: `JournalOperationAction::ApplyLiveWaybar`; política ADR-002 si el reload falla tras write OK
+- UI: botón **Apply live** en la página Waybar
+- **Alcance v1:** solo `config.jsonc`; `style.css` sigue por apply real / Theme Manager (sin opt-in aquí)
 
 ### Fase G — systemd controlled write *(si procede)*
 
 - Solo si existe un caso de uso concreto justificado
 - Operaciones adicionales en el allowlist del helper (start/stop/enable/disable de unidades específicas)
 - Requiere análisis de superficie de ataque antes de implementar
+
+### Post—Fase F: Rutas de producto (consolidación vs superficies nuevas)
+
+**Decisión de orden:** con la **Fase F (Waybar live)** cerrada, el siguiente tramo sano es **empaquetado + pulido operativo** antes de abrir superficies grandes nuevas.
+
+**Nota de nomenclatura:** aquí “Ruta A / Ruta B” son **prioridades de trabajo**; no son las mismas etiquetas históricas “Fase A / Fase B” de las viñetas superiores de esta sección (documentación vs Hyprland, etc.).
+
+#### Ruta A — más sólida (hacer primero)
+
+| Área | Objetivo |
+|---|---|
+| **Pulido / operaciones** | Mensajes accionables, estados de carga coherentes entre pantallas, coherencia Hyprland / Waybar / Temas / Wallpapers en patrones de éxito y fallo. |
+| **Cleanup de backups huérfanos** | `audit_config_backups` + registro `backup_registry.jsonl` + UI: huérfanos vs seguimiento total; `delete_orphan_backup` con dry-run y confirmación en la tabla. |
+| **“Últimas operaciones”** | *(parcial)* UI: filtros por acción y por OK/FAIL, búsqueda local en el lote cargado, columna `operation_id` con copiar al portapapeles, contador “X de Y”; columnas existentes `reload_status` / `error_summary`. Pendiente: ampliar límite de carga o paginación si hace falta. |
+| **Packaging serio** | Pipeline de release (artefactos reproducibles), metadatos y formato de distribución acordes al objetivo (p. ej. AppImage/deb/tar), instalación documentada, versionado visible en la app. |
+
+#### Ruta B — más visual / más superficie (después de A)
+
+| Área | Objetivo |
+|---|---|
+| **Búsqueda global** | Descubrir ajustes y páginas dentro de la app sin exponer paths del sistema; sin shell ni lectura fuera del modelo. |
+| **Keybindings / window rules** | Modelo acotado + UI que respete el include gestionado de Hyprland; no sobrescribir el principal. |
+| **Network / power** | Solo con el mismo rigor de catálogo cerrado que writes y systemd lectura actual. |
+| **Pulido UX amplio** | Vacíos de estado, jerarquía visual, accesibilidad básica, consistencia Theme Manager / wallpapers. |
+
+**Secuencia recomendada:** **F (hecha) → Ruta A → Ruta B.** La Fase G (systemd write) sigue siendo opcional y desacoplada; no bloquea A ni B.
 
 ---
 
@@ -710,11 +789,11 @@ El proyecto solo es apto para uso real cuando cumple todos estos criterios:
 | Subsistema | Reader (import) | Writer | Apply live | Rollback |
 |---|---|---|---|---|
 | Hyprland | Implementado (`reader.rs`) | Implementado (include gestionado) | Implementado (`hyprctl reload`) | Implementado |
-| Waybar | Implementado (`reader.rs`) | Implementado (full config) | No implementado (Fase F) | Implementado |
+| Waybar | Implementado (`reader.rs`) | Implementado (config + `style.css` vía tema) | Implementado (`pkill -USR2 waybar`) | Implementado |
 | Rofi | Implementado (`reader.rs`) | Implementado (full config) | No implementado | Implementado |
 | systemd | Implementado (D-Bus real + fixture fallback) | No implementado (solo lectura) | N/A | N/A |
 | Appearance (app-level settings) | Implementado (`AppearanceSettings`) | N/A | N/A | N/A |
 | Appearance (integración sistema GTK/Qt) | No implementado | No implementado | No implementado | N/A |
-| Theme Manager | No implementado | No implementado | No implementado | N/A |
+| Theme Manager | N/A (presets embebidos) | Implementado (multi-destino + `WaybarStyle`) | Opcional (`hyprctl reload`) | Snapshots + journal |
 | Wallpapers | No implementado | No implementado | No implementado | N/A |
-| Operation Journal | No implementado | No implementado | N/A | N/A |
+| Operation Journal | N/A | N/A | N/A | Implementado (lectura `list_recent_operations`) |

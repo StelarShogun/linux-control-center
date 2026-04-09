@@ -21,6 +21,7 @@ pub fn resolve_target_path(target: WriteTarget) -> Result<PathBuf, HelperError> 
         WriteTarget::HyprlandGeneratedConfig => ".config/hypr/generated/linux-control-center.conf",
         WriteTarget::HyprlandMainConfig => ".config/hypr/hyprland.conf",
         WriteTarget::WaybarConfig => ".config/waybar/config.jsonc",
+        WriteTarget::WaybarStyle => ".config/waybar/style.css",
         WriteTarget::RofiConfig => ".config/rofi/config.rasi",
     };
     Ok(home.join(rel))

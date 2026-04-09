@@ -1,4 +1,8 @@
-use crate::{error::CoreError, settings::AppSettings};
+use crate::{
+    error::CoreError,
+    settings::AppSettings,
+    wallpaper::validate_wallpaper_id,
+};
 
 /// Valida los campos clave de `AppSettings`.
 ///
@@ -12,6 +16,14 @@ pub fn validate_settings(settings: &AppSettings) -> Result<(), CoreError> {
     validate_hyprland(settings)?;
     validate_waybar(settings)?;
     validate_rofi(settings)?;
+    validate_wallpaper_prefs(settings)?;
+    Ok(())
+}
+
+fn validate_wallpaper_prefs(settings: &AppSettings) -> Result<(), CoreError> {
+    if let Some(ref id) = settings.wallpaper.last_applied_wallpaper_id {
+        validate_wallpaper_id(id).map_err(|e| CoreError::Validation(format!("wallpaper: {e}")))?;
+    }
     Ok(())
 }
 
@@ -62,6 +74,44 @@ fn validate_hyprland(settings: &AppSettings) -> Result<(), CoreError> {
             "hyprland.blur_passes must be > 0 when blur is enabled".into(),
         ));
     }
+    if !(-1.0..=1.0).contains(&h.input.mouse_sensitivity) {
+        return Err(CoreError::Validation(
+            "hyprland.input.mouse_sensitivity must be between -1.0 and 1.0".into(),
+        ));
+    }
+    for (i, b) in h.keyboard.binds.iter().enumerate() {
+        if b.enabled {
+            if b.key.trim().is_empty() {
+                return Err(CoreError::Validation(format!(
+                    "hyprland.keyboard.binds[{i}].key cannot be empty when enabled"
+                )));
+            }
+            if b.dispatcher.trim().is_empty() {
+                return Err(CoreError::Validation(format!(
+                    "hyprland.keyboard.binds[{i}].dispatcher cannot be empty when enabled"
+                )));
+            }
+        }
+        for field in [&b.key, &b.dispatcher, &b.args] {
+            if field.contains('\n') || field.contains('\r') {
+                return Err(CoreError::Validation(
+                    "hyprland keyboard bind fields must not contain newlines".into(),
+                ));
+            }
+        }
+    }
+    for (i, r) in h.windows.rules.iter().enumerate() {
+        if r.enabled && r.rule.trim().is_empty() {
+            return Err(CoreError::Validation(format!(
+                "hyprland.windows.rules[{i}].rule cannot be empty when enabled"
+            )));
+        }
+        if r.rule.contains('\n') || r.class.contains('\n') || r.title.contains('\n') {
+            return Err(CoreError::Validation(
+                "hyprland window rule fields must not contain newlines".into(),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -77,6 +127,16 @@ fn validate_waybar(settings: &AppSettings) -> Result<(), CoreError> {
     }
     if w.height == 0 {
         return Err(CoreError::Validation("waybar.height must be > 0".into()));
+    }
+    for (label, c) in [
+        ("waybar.bar_background", &w.bar_background),
+        ("waybar.bar_foreground", &w.bar_foreground),
+        ("waybar.module_background", &w.module_background),
+        ("waybar.accent", &w.accent),
+    ] {
+        if !c.starts_with('#') {
+            return Err(CoreError::Validation(format!("{label} must start with '#'")));
+        }
     }
     Ok(())
 }
@@ -111,6 +171,22 @@ fn validate_rofi(settings: &AppSettings) -> Result<(), CoreError> {
     if r.drun_display_format.is_empty() {
         return Err(CoreError::Validation(
             "rofi.drun_display_format cannot be empty".into(),
+        ));
+    }
+    for (label, c) in [
+        ("rofi.vis_bg", &r.vis_bg),
+        ("rofi.vis_fg", &r.vis_fg),
+        ("rofi.vis_accent", &r.vis_accent),
+        ("rofi.vis_border", &r.vis_border),
+        ("rofi.vis_input_bg", &r.vis_input_bg),
+    ] {
+        if !c.starts_with('#') {
+            return Err(CoreError::Validation(format!("{label} must start with '#'")));
+        }
+    }
+    if r.border_radius == 0 {
+        return Err(CoreError::Validation(
+            "rofi.border_radius must be > 0".into(),
         ));
     }
     Ok(())

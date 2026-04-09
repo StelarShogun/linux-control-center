@@ -2,11 +2,17 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     allowlist::{home_dir, MAX_CONTENT_BYTES},
-    types::{HelperError, WriteRequest},
+    types::{HelperError, WriteRequest, WriteTarget},
 };
 
 /// Validación del request (sin I/O).
 pub fn validate_write_request(req: &WriteRequest) -> Result<(), HelperError> {
+    // HyprlandMainConfig está prohibido para overwrites completos.
+    // La única vía permitida sobre el archivo principal es ensure_hyprland_main_sources_lcc_include().
+    if matches!(req.target, WriteTarget::HyprlandMainConfig) {
+        return Err(HelperError::HyprlandMainConfigWriteForbidden);
+    }
+
     if req.content.is_empty() {
         return Err(HelperError::EmptyContent);
     }

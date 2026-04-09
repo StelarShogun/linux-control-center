@@ -3,4 +3,4 @@
 /**
  * Destino de escritura — allowlist cerrada (sin rutas arbitrarias).
  */
-export type WriteTarget = "HyprlandGeneratedConfig" | "HyprlandMainConfig" | "WaybarConfig" | "RofiConfig";
+export type WriteTarget = "HyprlandGeneratedConfig" | "HyprlandMainConfig" | "WaybarConfig" | "WaybarStyle" | "RofiConfig";

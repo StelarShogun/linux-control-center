@@ -3,4 +3,20 @@
 /**
  * Configuración de la barra Waybar.
  */
-export type WaybarSettings = { position: string, height: number, modules_left: Array<string>, modules_center: Array<string>, modules_right: Array<string>, };
+export type WaybarSettings = { position: string, height: number, 
+/**
+ * Color de fondo de la barra (`#rrggbb`).
+ */
+bar_background: string, 
+/**
+ * Color de texto/iconos principal en la barra.
+ */
+bar_foreground: string, 
+/**
+ * Fondo de módulos (workspace, etc.).
+ */
+module_background: string, 
+/**
+ * Acento (workspace activo, estados destacados).
+ */
+accent: string, modules_left: Array<string>, modules_center: Array<string>, modules_right: Array<string>, };

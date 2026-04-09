@@ -23,11 +23,17 @@ serde = { version = "1.0", features = ["derive"] }
 thiserror = { workspace = true }
 toml = { workspace = true }
 core-model = { path = "../../../crates/core-model" }
+journal-store = { path = "../../../crates/journal-store" }
 adapters-hyprland = { path = "../../../crates/adapters-hyprland" }
 adapters-waybar = { path = "../../../crates/adapters-waybar" }
 adapters-rofi = { path = "../../../crates/adapters-rofi" }
 adapters-systemd = { path = "../../../crates/adapters-systemd" }
+adapters-network = { path = "../../../crates/adapters-network" }
+adapters-power = { path = "../../../crates/adapters-power" }
 privileged-helper = { path = "../../../crates/privileged-helper" }
+wallpaper-catalog = { path = "../../../crates/wallpaper-catalog" }
+wallpaper-engine-adapter = { path = "../../../crates/wallpaper-engine-adapter" }
+base64 = "0.22"
 uuid = { workspace = true }
 time = { workspace = true }
 log = "0.4"

@@ -1,13 +1,29 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { OperationJournalEntry } from "../types/generated/OperationJournalEntry";
+import type { ThemePresetSummary } from "../types/generated/ThemePresetSummary";
 import type { AppSettings } from "../types/settings";
+import type { CurrentWallpaperState } from "../types/generated/CurrentWallpaperState";
+import type { WallpaperApplyResult } from "../types/generated/WallpaperApplyResult";
+import type { WallpaperBackendStatus } from "../types/generated/WallpaperBackendStatus";
+import type { WallpaperCollection } from "../types/generated/WallpaperCollection";
+import type { WallpaperPreview } from "../types/generated/WallpaperPreview";
 import type {
   ApplyConfigToRealPathArgs,
   ApplyConfigToSandboxArgs,
   ApplyLiveHyprlandArgs,
   ApplyLiveResult,
+  ApplyLiveWaybarArgs,
+  ApplyThemeArgs,
   ApplyToRealPathResult,
   ApplyToSandboxResult,
+  ApplyWallpaperArgs,
+  BackupAuditReport,
   CreateSnapshotArgs,
+  DeleteOrphanBackupArgs,
+  DeleteOrphanBackupResult,
+  GetThemePreviewArgs,
+  GetWallpaperPreviewArgs,
+  ListWallpapersArgs,
   RestoreSnapshotArgs,
   RollbackConfigFileArgs,
   RollbackFullStateArgs,
@@ -15,7 +31,28 @@ import type {
   SaveProfileArgs,
   SaveSettingsArgs,
   SnapshotInfo,
+  ThemeApplyResult,
+  ThemePreviewDto,
 } from "./types";
+import type { NetworkInterface } from "../types/generated";
+import type { PowerProfileKind, PowerStatus } from "../types/generated";
+
+// ─── Hyprland migration types ────────────────────────────────────────────────
+
+export type HyprlandSetupState =
+  | { type: "ManagedIncludePresent" }
+  | { type: "ManagedIncludeAbsent" }
+  | { type: "LegacyGeneratedDetected" }
+  | { type: "NonStandardSetup"; reason: string }
+  | { type: "MainFileNotFound" };
+
+export interface HyprlandMigrationStatus {
+  state: HyprlandSetupState;
+  main_config_exists: boolean;
+  available_backups: string[];
+  can_auto_repair: boolean;
+  warnings: string[];
+}
 
 export async function getCurrentSettings(): Promise<AppSettings> {
   return await invoke<AppSettings>("get_current_settings");
@@ -29,6 +66,59 @@ export async function getCurrentSettings(): Promise<AppSettings> {
  */
 export async function importSystemSettings(): Promise<AppSettings> {
   return await invoke<AppSettings>("import_system_settings");
+}
+
+/** Operation Journal: últimas operaciones sensibles (apply / rollback), más recientes primero. */
+export async function listRecentOperations(limit?: number): Promise<OperationJournalEntry[]> {
+  return await invoke<OperationJournalEntry[]>("list_recent_operations", { limit });
+}
+
+/** Cruza backups en ~/.config (allowlist) con journal, snapshots y registro persistente. No modifica disco. */
+export async function auditConfigBackups(): Promise<BackupAuditReport> {
+  return await invoke<BackupAuditReport>("audit_config_backups");
+}
+
+/** Borra un backup huérfano validado (solo basename + WriteTarget); `dry_run` no borra. */
+export async function deleteOrphanBackup(
+  args: DeleteOrphanBackupArgs,
+): Promise<DeleteOrphanBackupResult> {
+  return await invoke<DeleteOrphanBackupResult>("delete_orphan_backup", { args });
+}
+
+export async function listThemePresets(): Promise<ThemePresetSummary[]> {
+  return await invoke<ThemePresetSummary[]>("list_theme_presets");
+}
+
+export async function getThemePreview(args: GetThemePreviewArgs): Promise<ThemePreviewDto> {
+  return await invoke<ThemePreviewDto>("get_theme_preview", { args });
+}
+
+export async function applyTheme(args: ApplyThemeArgs): Promise<ThemeApplyResult> {
+  return await invoke<ThemeApplyResult>("apply_theme", { args });
+}
+
+export async function listWallpapers(args?: ListWallpapersArgs): Promise<WallpaperCollection> {
+  return await invoke<WallpaperCollection>("list_wallpapers", { args: args ?? {} });
+}
+
+export async function refreshWallpaperCatalog(): Promise<WallpaperCollection> {
+  return await invoke<WallpaperCollection>("refresh_wallpaper_catalog", {});
+}
+
+export async function getWallpaperPreview(args: GetWallpaperPreviewArgs): Promise<WallpaperPreview> {
+  return await invoke<WallpaperPreview>("get_wallpaper_preview", { args });
+}
+
+export async function getWallpaperBackendStatus(): Promise<WallpaperBackendStatus> {
+  return await invoke<WallpaperBackendStatus>("get_wallpaper_backend_status", {});
+}
+
+export async function getCurrentWallpaper(): Promise<CurrentWallpaperState> {
+  return await invoke<CurrentWallpaperState>("get_current_wallpaper", {});
+}
+
+export async function applyWallpaper(args: ApplyWallpaperArgs): Promise<WallpaperApplyResult> {
+  return await invoke<WallpaperApplyResult>("apply_wallpaper", { args });
 }
 
 export async function listSnapshots(): Promise<SnapshotInfo[]> {
@@ -105,6 +195,43 @@ export async function applyLiveHyprland(
   return await invoke<ApplyLiveResult>("apply_live_hyprland", { args });
 }
 
+/**
+ * Escribe ~/.config/waybar/config.jsonc y envía SIGUSR2 a Waybar (`pkill -USR2 waybar`).
+ * Si el reload falla (Waybar no corre, sin pkill), el archivo en disco sigue actualizado.
+ */
+export async function applyLiveWaybar(
+  args: ApplyLiveWaybarArgs
+): Promise<ApplyLiveResult> {
+  return await invoke<ApplyLiveResult>("apply_live_waybar", { args });
+}
+
+// ─── Hyprland migration commands ─────────────────────────────────────────────
+
+/**
+ * Inspects the managed-include state of the user's hyprland.conf.
+ * Read-only — does not modify any file.
+ */
+export async function inspectHyprlandSetup(): Promise<HyprlandMigrationStatus> {
+  return await invoke<HyprlandMigrationStatus>("inspect_hyprland_setup_cmd");
+}
+
+/**
+ * Inserts the managed include into hyprland.conf if it is absent (idempotent).
+ * Returns `true` if the include was inserted, `false` if it was already present.
+ * Should only be called when state is `ManagedIncludeAbsent`.
+ */
+export async function repairHyprlandMainInclude(): Promise<boolean> {
+  return await invoke<boolean>("repair_hyprland_main_include");
+}
+
+/**
+ * Lists the basenames of available backups for hyprland.conf
+ * (e.g. `hyprland.conf.bak.20260409T…-uuid`), sorted newest first.
+ */
+export async function listHyprlandMainBackups(): Promise<string[]> {
+  return await invoke<string[]>("list_hyprland_main_backups_cmd");
+}
+
 export interface UnitStatusDto {
   name: string;
   description: string;
@@ -137,5 +264,20 @@ export async function listSystemdUnits(
 /** Queries the status of a specific systemd unit. Requires D-Bus; returns error if unavailable. */
 export async function getSystemdUnit(name: string): Promise<UnitStatusDto> {
   return await invoke<UnitStatusDto>("get_systemd_unit", { name });
+}
+
+/** Interfaces de red (solo lectura). */
+export async function listNetworkInterfaces(): Promise<NetworkInterface[]> {
+  return await invoke<NetworkInterface[]>("list_network_interfaces");
+}
+
+/** Estado de energía y perfil activo. */
+export async function getPowerStatus(): Promise<PowerStatus> {
+  return await invoke<PowerStatus>("get_power_status");
+}
+
+/** Cambia perfil vía powerprofilesctl. */
+export async function setPowerProfile(profile: PowerProfileKind): Promise<void> {
+  return await invoke<void>("set_power_profile", { args: { profile } });
 }
 

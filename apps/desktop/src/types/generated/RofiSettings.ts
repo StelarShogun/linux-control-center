@@ -8,4 +8,4 @@ export type RofiSettings = { theme: string,
 /**
  * Lista de modos habilitados. Ejemplo: "drun,run,window".
  */
-modi: string, font: string, show_icons: boolean, icon_theme: string, display_drun: string, display_run: string, display_window: string, drun_display_format: string, };
+modi: string, font: string, show_icons: boolean, icon_theme: string, display_drun: string, display_run: string, display_window: string, drun_display_format: string, vis_bg: string, vis_fg: string, vis_accent: string, vis_border: string, vis_input_bg: string, border_radius: number, };
