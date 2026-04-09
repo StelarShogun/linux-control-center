@@ -600,6 +600,21 @@ pub fn apply_live_hyprland(
     })
 }
 
+/// Lee las configuraciones actuales del sistema desde disco y devuelve un `AppSettings`
+/// construido a partir de ellas. No modifica el estado en memoria ni persiste nada.
+///
+/// Si algún archivo no existe o no puede parsearse, ese subsistema usa `Default`.
+/// `appearance` siempre usa `Default` (no hay lectura de temas GTK/Qt en esta fase).
+#[tauri::command]
+pub fn import_system_settings() -> Result<AppSettings, String> {
+    Ok(AppSettings {
+        appearance: core_model::settings::AppearanceSettings::default(),
+        hyprland: adapters_hyprland::read_from_system(),
+        waybar: adapters_waybar::read_from_system(),
+        rofi: adapters_rofi::read_from_system(),
+    })
+}
+
 fn capitalize_first(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {

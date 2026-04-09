@@ -21,6 +21,16 @@ export async function getCurrentSettings(): Promise<AppSettings> {
   return await invoke<AppSettings>("get_current_settings");
 }
 
+/**
+ * Lee los archivos de configuración reales del sistema
+ * (~/.config/hypr, ~/.config/waybar, ~/.config/rofi) y devuelve un AppSettings
+ * construido a partir de ellos. No persiste ni modifica el estado; el llamador
+ * debe invocar saveSettings si quiere persistir el resultado.
+ */
+export async function importSystemSettings(): Promise<AppSettings> {
+  return await invoke<AppSettings>("import_system_settings");
+}
+
 export async function listSnapshots(): Promise<SnapshotInfo[]> {
   return await invoke<SnapshotInfo[]>("list_snapshots");
 }

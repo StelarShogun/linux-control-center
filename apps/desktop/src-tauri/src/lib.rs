@@ -20,7 +20,20 @@ pub fn run() {
 
       let initial = match persistence::load_current_settings(&data_dir) {
         Ok(Some(s)) => s,
-        Ok(None) => core_model::settings::AppSettings::default(),
+        Ok(None) => {
+          // Primera vez sin settings.toml: importar desde los archivos del sistema real.
+          let imported = core_model::settings::AppSettings {
+            appearance: core_model::settings::AppearanceSettings::default(),
+            hyprland: adapters_hyprland::read_from_system(),
+            waybar: adapters_waybar::read_from_system(),
+            rofi: adapters_rofi::read_from_system(),
+          };
+          // Persistir para que próximos arranques no relean disco innecesariamente.
+          if let Err(e) = persistence::save_current_settings(&data_dir, &imported) {
+            log::warn!("failed to persist imported settings: {e}");
+          }
+          imported
+        }
         Err(e) => {
           log::warn!("failed to load settings.toml, using defaults: {e}");
           core_model::settings::AppSettings::default()
@@ -51,6 +64,7 @@ pub fn run() {
       commands::preview_rofi_config,
       commands::list_systemd_units,
       commands::get_systemd_unit,
+      commands::import_system_settings,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

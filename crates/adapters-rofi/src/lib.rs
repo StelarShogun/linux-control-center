@@ -16,9 +16,11 @@
 //! - `modi` es hardcoded (`"drun,run,window"`); no es aún campo de `RofiSettings`.
 
 pub mod adapter;
+pub mod reader;
 pub mod types;
 
 pub use adapter::{export_from_settings, load_fixture};
+pub use reader::read_from_system;
 pub use types::{FixtureSource, RofiExportResult, RofiFixtureResult};
 
 #[cfg(test)]

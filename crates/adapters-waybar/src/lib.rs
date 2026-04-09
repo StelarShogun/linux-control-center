@@ -1,7 +1,9 @@
 pub mod adapter;
+pub mod reader;
 pub mod types;
 
 pub use adapter::{export_from_settings, load_fixture};
+pub use reader::read_from_system;
 pub use types::{FixtureSource, WaybarExportResult, WaybarFixtureResult};
 
 #[cfg(test)]
