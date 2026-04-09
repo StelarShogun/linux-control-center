@@ -22,3 +22,6 @@ toml = "0.8"
 toml_edit = "0.22"
 zbus = "4"
 notify = "8"
+uuid = { version = "1", features = ["v4"] }
+ts-rs = { version = "10", features = ["serde-compat"] }
+time = { version = "0.3", features = ["formatting"] }

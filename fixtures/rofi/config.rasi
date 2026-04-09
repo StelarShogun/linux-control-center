@@ -1,0 +1,64 @@
+/* Linux Control Center — Rofi fixture
+ * Ejemplo mínimo realista para desarrollo y tests.
+ * No se aplica al sistema real en fase 1.
+ */
+
+configuration {
+    modi:               "drun,run,window";
+    show-icons:         true;
+    icon-theme:         "Papirus";
+    display-drun:       "Apps";
+    display-run:        "Run";
+    display-window:     "Windows";
+    drun-display-format: "{name}";
+    font:               "Inter 11";
+}
+
+* {
+    bg:      #2e3440;
+    fg:      #d8dee9;
+    accent:  #88c0d0;
+    border:  #4c566a;
+
+    background-color: transparent;
+    text-color:       @fg;
+}
+
+window {
+    background-color: @bg;
+    border:           2px solid @border;
+    border-radius:    8px;
+    width:            480px;
+}
+
+inputbar {
+    children:         [prompt, entry];
+    background-color: #3b4252;
+    border-radius:    6px;
+    padding:          6px 10px;
+    margin:           8px;
+}
+
+prompt {
+    text-color: @accent;
+    margin:     0 8px 0 0;
+}
+
+entry {
+    placeholder: "Search…";
+}
+
+listview {
+    padding:    4px 8px;
+    scrollbar:  false;
+}
+
+element {
+    padding:      6px 8px;
+    border-radius: 4px;
+}
+
+element selected {
+    background-color: @accent;
+    text-color:       @bg;
+}

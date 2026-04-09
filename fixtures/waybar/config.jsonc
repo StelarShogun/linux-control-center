@@ -1,0 +1,58 @@
+// Linux Control Center — Waybar fixture
+// Ejemplo mínimo realista para desarrollo y tests.
+// No se aplica al sistema real en fase 1.
+{
+    "layer": "top",
+    "position": "top",
+    "height": 32,
+    "spacing": 4,
+
+    "modules-left": ["hyprland/workspaces", "hyprland/window"],
+    "modules-center": ["clock"],
+    "modules-right": ["network", "cpu", "memory", "battery", "tray"],
+
+    "hyprland/workspaces": {
+        "format": "{id}",
+        "on-scroll-up": "hyprctl dispatch workspace e+1",
+        "on-scroll-down": "hyprctl dispatch workspace e-1"
+    },
+
+    "hyprland/window": {
+        "max-length": 60
+    },
+
+    "clock": {
+        "format": "{:%H:%M  %d %b}",
+        "tooltip-format": "{calendar}"
+    },
+
+    "cpu": {
+        "format": "CPU {usage}%",
+        "interval": 5
+    },
+
+    "memory": {
+        "format": "MEM {}%",
+        "interval": 10
+    },
+
+    "network": {
+        "format-wifi": "{essid} ({signalStrength}%)",
+        "format-ethernet": "ETH",
+        "format-disconnected": "offline",
+        "tooltip-format": "{ifname}: {ipaddr}"
+    },
+
+    "battery": {
+        "format": "BAT {capacity}%",
+        "format-charging": "CHG {capacity}%",
+        "states": {
+            "warning": 30,
+            "critical": 10
+        }
+    },
+
+    "tray": {
+        "spacing": 8
+    }
+}

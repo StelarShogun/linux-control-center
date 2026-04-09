@@ -1,0 +1,346 @@
+use std::{
+    fs,
+    io,
+    path::{Path, PathBuf},
+};
+
+use core_model::{
+    profile::{ProfileId, SettingsProfile},
+    settings::AppSettings,
+    snapshot::{SnapshotId, SettingsSnapshot},
+};
+use thiserror::Error;
+use uuid::Uuid;
+
+use crate::types::SnapshotInfo;
+
+#[derive(Debug, Error)]
+pub enum PersistenceError {
+    #[error("io error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("toml serialize error: {0}")]
+    TomlSerialize(String),
+
+    #[error("toml deserialize error: {0}")]
+    TomlDeserialize(String),
+
+    #[error("profile not found: {0}")]
+    ProfileNotFound(ProfileId),
+
+    #[error("snapshot not found: {0}")]
+    SnapshotNotFound(SnapshotId),
+
+    #[error("invalid id (must be lowercase hex and hyphens only): {0}")]
+    InvalidId(String),
+}
+
+/// Validates that an ID only contains characters safe for use as a path component.
+/// Accepts UUID v4 format: lowercase hex digits and hyphens, max 64 chars.
+fn validate_id(id: &str) -> Result<(), PersistenceError> {
+    if id.is_empty()
+        || id.len() > 64
+        || !id
+            .chars()
+            .all(|c| matches!(c, '0'..='9' | 'a'..='f' | 'A'..='F' | '-'))
+    {
+        return Err(PersistenceError::InvalidId(id.to_string()));
+    }
+    Ok(())
+}
+
+/// Subset de campos de un snapshot para deserialización parcial.
+/// Serde ignora los campos desconocidos por defecto, por lo que no se
+/// construye `AppSettings` al listar — solo se extraen los metadatos.
+#[derive(serde::Deserialize)]
+struct SnapshotHeader {
+    id: SnapshotId,
+    timestamp: String,
+    label: Option<String>,
+    backup_file_name: Option<String>,
+}
+
+/// Writes `content` to `path` atomically using a write-then-rename pattern.
+///
+/// On POSIX, `rename(2)` is atomic as long as both the temporary file and the
+/// destination are on the same filesystem, which is guaranteed here since both
+/// live under `base_dir`.
+fn atomic_write(path: &Path, content: &str) -> io::Result<()> {
+    let tmp = path.with_extension("toml.tmp");
+    fs::write(&tmp, content)?;
+    fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+fn profiles_dir(base_dir: &Path) -> PathBuf {
+    base_dir.join("profiles")
+}
+
+fn snapshots_dir(base_dir: &Path) -> PathBuf {
+    base_dir.join("snapshots")
+}
+
+fn profile_path(base_dir: &Path, id: &ProfileId) -> PathBuf {
+    profiles_dir(base_dir).join(format!("{id}.toml"))
+}
+
+fn snapshot_path(base_dir: &Path, id: &SnapshotId) -> PathBuf {
+    snapshots_dir(base_dir).join(format!("{id}.toml"))
+}
+
+fn current_settings_path(base_dir: &Path) -> PathBuf {
+    base_dir.join("settings.toml")
+}
+
+pub fn save_profile(base_dir: &Path, profile: &SettingsProfile) -> Result<(), PersistenceError> {
+    validate_id(&profile.metadata.id)?;
+    let dir = profiles_dir(base_dir);
+    fs::create_dir_all(&dir)?;
+
+    let content = profile.to_toml_str().map_err(|e| match e {
+        core_model::CoreError::ProfileSerialization(msg) => PersistenceError::TomlSerialize(msg),
+        other => PersistenceError::TomlSerialize(other.to_string()),
+    })?;
+
+    atomic_write(&profile_path(base_dir, &profile.metadata.id), &content)?;
+    Ok(())
+}
+
+pub fn load_profile(base_dir: &Path, id: &ProfileId) -> Result<SettingsProfile, PersistenceError> {
+    validate_id(id)?;
+    let path = profile_path(base_dir, id);
+    if !path.exists() {
+        return Err(PersistenceError::ProfileNotFound(id.clone()));
+    }
+    let content = fs::read_to_string(&path)?;
+    SettingsProfile::from_toml_str(&content).map_err(|e| match e {
+        core_model::CoreError::ProfileDeserialization(msg) => PersistenceError::TomlDeserialize(msg),
+        other => PersistenceError::TomlDeserialize(other.to_string()),
+    })
+}
+
+pub fn load_current_settings(base_dir: &Path) -> Result<Option<AppSettings>, PersistenceError> {
+    let path = current_settings_path(base_dir);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(&path)?;
+    let settings: AppSettings =
+        toml::from_str(&content).map_err(|e| PersistenceError::TomlDeserialize(e.to_string()))?;
+    Ok(Some(settings))
+}
+
+pub fn save_current_settings(base_dir: &Path, settings: &AppSettings) -> Result<(), PersistenceError> {
+    fs::create_dir_all(base_dir)?;
+    let content = toml::to_string_pretty(settings)
+        .map_err(|e| PersistenceError::TomlSerialize(e.to_string()))?;
+    atomic_write(&current_settings_path(base_dir), &content)?;
+    Ok(())
+}
+
+pub fn new_profile_id() -> ProfileId {
+    Uuid::new_v4().to_string()
+}
+
+pub fn new_snapshot_id() -> SnapshotId {
+    Uuid::new_v4().to_string()
+}
+
+pub fn save_snapshot(
+    base_dir: &Path,
+    snapshot: &SettingsSnapshot,
+) -> Result<(), PersistenceError> {
+    validate_id(&snapshot.id)?;
+    let dir = snapshots_dir(base_dir);
+    fs::create_dir_all(&dir)?;
+
+    let content = toml::to_string_pretty(snapshot)
+        .map_err(|e| PersistenceError::TomlSerialize(e.to_string()))?;
+    atomic_write(&snapshot_path(base_dir, &snapshot.id), &content)?;
+
+    enforce_snapshot_cap(base_dir, 20)?;
+    Ok(())
+}
+
+fn enforce_snapshot_cap(base_dir: &Path, max: usize) -> Result<(), PersistenceError> {
+    let mut list = list_snapshots(base_dir)?;
+    if list.len() <= max {
+        return Ok(());
+    }
+
+    // list_snapshots devuelve orden descendente por timestamp; borramos desde el final.
+    while list.len() > max {
+        let last = list
+            .pop()
+            .expect("len checked above; pop must succeed");
+        let path = snapshot_path(base_dir, &last.id);
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn list_snapshots(base_dir: &Path) -> Result<Vec<SnapshotInfo>, PersistenceError> {
+    let dir = snapshots_dir(base_dir);
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut out = Vec::new();
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        let content = fs::read_to_string(&path)?;
+        let header: SnapshotHeader =
+            toml::from_str(&content).map_err(|e| PersistenceError::TomlDeserialize(e.to_string()))?;
+        out.push(SnapshotInfo {
+            id: header.id,
+            timestamp: header.timestamp,
+            label: header.label,
+            backup_file_name: header.backup_file_name,
+        });
+    }
+
+    out.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    Ok(out)
+}
+
+/// Busca el primer snapshot cuyo `backup_file_name` coincide exactamente.
+///
+/// Devuelve `None` si no existe ningún snapshot con ese backup.
+pub fn find_snapshot_by_backup_file_name(
+    base_dir: &Path,
+    backup_file_name: &str,
+) -> Result<Option<SnapshotInfo>, PersistenceError> {
+    let all = list_snapshots(base_dir)?;
+    Ok(all.into_iter().find(|s| s.backup_file_name.as_deref() == Some(backup_file_name)))
+}
+
+pub fn load_snapshot_settings(
+    base_dir: &Path,
+    id: &SnapshotId,
+) -> Result<AppSettings, PersistenceError> {
+    validate_id(id)?;
+    let path = snapshot_path(base_dir, id);
+    if !path.exists() {
+        return Err(PersistenceError::SnapshotNotFound(id.clone()));
+    }
+    let content = fs::read_to_string(&path)?;
+    let snap: SettingsSnapshot =
+        toml::from_str(&content).map_err(|e| PersistenceError::TomlDeserialize(e.to_string()))?;
+    Ok(snap.settings)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use core_model::{settings::AppSettings, snapshot::create_snapshot};
+
+    use super::*;
+
+    fn unique_temp_dir() -> PathBuf {
+        let mut dir = std::env::temp_dir();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        dir.push(format!("linux-control-center-test-{nanos}"));
+        fs::create_dir_all(&dir).expect("failed to create temp dir");
+        dir
+    }
+
+    const PROFILE_ID: &str = "a1b2c3d4-e5f6-4890-abcd-ef1234567890";
+    const SNAPSHOT_ID: &str = "b2c3d4e5-f6a7-4890-bcde-f01234567891";
+    const MISSING_PROFILE_ID: &str = "ffffffff-ffff-4fff-afff-ffffffffffff";
+    const MISSING_SNAPSHOT_ID: &str = "eeeeeeee-eeee-4eee-aeee-eeeeeeeeeeee";
+
+    #[test]
+    fn save_and_load_profile_roundtrip() {
+        let dir = unique_temp_dir();
+        let settings = AppSettings::default();
+        let profile = SettingsProfile::new(PROFILE_ID, "Test", settings.clone());
+
+        save_profile(&dir, &profile).expect("save_profile failed");
+        let loaded = load_profile(&dir, &profile.metadata.id).expect("load_profile failed");
+
+        assert_eq!(loaded.metadata.id, profile.metadata.id);
+        assert_eq!(loaded.metadata.name, "Test");
+        assert_eq!(loaded.settings, settings);
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn load_profile_missing_returns_typed_error() {
+        let dir = unique_temp_dir();
+        let err = load_profile(&dir, &MISSING_PROFILE_ID.to_string()).unwrap_err();
+        assert!(matches!(err, PersistenceError::ProfileNotFound(_)));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_list_and_restore_snapshot_settings() {
+        let dir = unique_temp_dir();
+
+        let mut s = AppSettings::default();
+        s.hyprland.gaps_in = 10;
+        let snap = create_snapshot(
+            SNAPSHOT_ID,
+            "1970-01-01T00:00:01Z",
+            Some("before".into()),
+            None,
+            s.clone(),
+        );
+
+        save_snapshot(&dir, &snap).expect("save_snapshot failed");
+
+        let list = list_snapshots(&dir).expect("list_snapshots failed");
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, SNAPSHOT_ID);
+        assert_eq!(list[0].label.as_deref(), Some("before"));
+
+        let restored = load_snapshot_settings(&dir, &SNAPSHOT_ID.to_string()).expect("restore failed");
+        assert_eq!(restored, s);
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn restore_missing_snapshot_returns_typed_error() {
+        let dir = unique_temp_dir();
+        let err = load_snapshot_settings(&dir, &MISSING_SNAPSHOT_ID.to_string()).unwrap_err();
+        assert!(matches!(err, PersistenceError::SnapshotNotFound(_)));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn invalid_id_is_rejected() {
+        let dir = unique_temp_dir();
+        let err = load_profile(&dir, &"../../etc/passwd".to_string()).unwrap_err();
+        assert!(matches!(err, PersistenceError::InvalidId(_)));
+        let err2 = load_snapshot_settings(&dir, &"../nope".to_string()).unwrap_err();
+        assert!(matches!(err2, PersistenceError::InvalidId(_)));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_and_load_current_settings_roundtrip() {
+        let dir = unique_temp_dir();
+        let mut s = AppSettings::default();
+        s.appearance.theme = "light".into();
+
+        save_current_settings(&dir, &s).expect("save_current_settings failed");
+        let loaded = load_current_settings(&dir)
+            .expect("load_current_settings failed")
+            .expect("expected Some");
+        assert_eq!(loaded, s);
+
+        fs::remove_dir_all(&dir).ok();
+    }
+}
+

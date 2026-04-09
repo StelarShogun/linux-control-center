@@ -1,0 +1,44 @@
+# Linux Control Center — Perfil base
+# Cargado por defecto si no existe perfil de usuario.
+
+[metadata]
+id = "00000000-0000-0000-0000-000000000001"
+name = "Default"
+description = "Perfil base del sistema"
+created_at = "2026-04-09T00:00:00Z"
+
+[settings.appearance]
+theme = "dark"
+accent_color = "#88c0d0"
+font_family = "Inter"
+font_size = 11
+icon_theme = "Papirus"
+cursor_theme = "Adwaita"
+cursor_size = 24
+
+[settings.hyprland]
+gaps_in = 4
+gaps_out = 8
+border_size = 2
+active_border_color = "#88c0d0"
+inactive_border_color = "#4c566a"
+rounding = 8
+animations_enabled = true
+blur_enabled = true
+blur_size = 4
+blur_passes = 2
+
+[settings.waybar]
+position = "top"
+height = 32
+modules_left = ["hyprland/workspaces", "hyprland/window"]
+modules_center = ["clock"]
+modules_right = ["network", "cpu", "memory", "battery", "tray"]
+
+[settings.rofi]
+# NOTE: Rofi adapter no implementado en fase 1.
+# Estos valores se reservan para fase 2.
+theme = "nord"
+font = "Inter 11"
+show_icons = true
+icon_theme = "Papirus"

@@ -5,3 +5,13 @@ version.workspace = true
 license.workspace = true
 
 [dependencies]
+thiserror = { workspace = true }
+core-model = { path = "../core-model" }
+dirs = "5"
+serde = { workspace = true, features = ["derive"] }
+ts-rs = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

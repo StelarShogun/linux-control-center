@@ -1,0 +1,46 @@
+pkgname=linux-control-center
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Desktop UI to preview/apply Hyprland/Waybar/Rofi config with safe backups"
+arch=("x86_64")
+url="https://github.com/linux-control-center/linux-control-center"
+license=("MIT")
+depends=("webkit2gtk-4.1")
+makedepends=("git" "nodejs" "pnpm" "rust" "cargo")
+source=(
+  "git+$url.git"
+)
+sha256sums=("SKIP")
+
+pkgver() {
+  cd "$srcdir/linux-control-center"
+  # Convert `v0.1.0-12-g<sha>` to `0.1.0.r12.g<sha>` (Arch-style).
+  local ver
+  ver="$(git describe --tags --long --match 'v[0-9]*' 2>/dev/null || true)"
+  if [[ -n "$ver" ]]; then
+    ver="${ver#v}"
+    ver="${ver/-/.r}"
+    ver="${ver/-/.g}"
+    printf "%s" "$ver"
+    return
+  fi
+  # Fallback for repos without tags.
+  printf "0.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$srcdir/linux-control-center"
+  pnpm -C apps/desktop install --frozen-lockfile
+  pnpm -C apps/desktop exec tauri build --no-bundle
+}
+
+package() {
+  cd "$srcdir/linux-control-center"
+
+  install -Dm755 "target/release/app" "$pkgdir/usr/bin/linux-control-center"
+  install -Dm644 "packaging/arch/linux-control-center.desktop" \
+    "$pkgdir/usr/share/applications/linux-control-center.desktop"
+  install -Dm644 "apps/desktop/src-tauri/icons/icon.png" \
+    "$pkgdir/usr/share/pixmaps/linux-control-center.png"
+}
+
