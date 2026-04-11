@@ -1,6 +1,6 @@
 use adapters_hyprland::{adapter as hyprland_adapter, reload_compositor};
 use adapters_network::NetworkInterface;
-use adapters_power::{PowerProfileKind, PowerStatus};
+use adapters_power::{PowerProfileKind, PowerStatus, SuspendSettings};
 use adapters_rofi::adapter as rofi_adapter;
 use adapters_systemd::{
     dto::{unit_info_to_dto, ListUnitsResponse, UnitStatusDto},
@@ -400,6 +400,29 @@ pub fn preview_waybar_config(state: State<'_, AppState>) -> Result<String, Strin
         .map_err(|_| "state lock poisoned".to_string())?;
     let result = waybar_adapter::export_from_settings(&settings.waybar);
     Ok(result.content)
+}
+
+/// Lee `~/.config/waybar/style.css` en disco (solo lectura; puede truncarse).
+#[tauri::command]
+pub fn read_waybar_style_disk() -> Result<Option<String>, String> {
+    let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else {
+        return Ok(None);
+    };
+    let p = home.join(".config/waybar/style.css");
+    if !p.is_file() {
+        return Ok(None);
+    }
+    let s = fs::read_to_string(&p).map_err(|e| e.to_string())?;
+    const MAX: usize = 48_000;
+    if s.len() > MAX {
+        Ok(Some(format!(
+            "{}\n\n/* … truncado ({} bytes total) */\n",
+            &s[..MAX],
+            s.len()
+        )))
+    } else {
+        Ok(Some(s))
+    }
 }
 
 /// Returns a preview of the Rofi config that would be generated from current settings.
@@ -1567,6 +1590,12 @@ pub fn get_power_status() -> Result<PowerStatus, String> {
     Ok(adapters_power::get_power_status())
 }
 
+/// Configuración actual de suspensión automática vía `hypridle.conf`.
+#[tauri::command]
+pub fn get_suspend_settings() -> Result<SuspendSettings, String> {
+    Ok(adapters_power::get_suspend_settings())
+}
+
 #[derive(Debug, serde::Deserialize)]
 pub struct SetPowerProfileArgs {
     pub profile: PowerProfileKind,
@@ -1576,6 +1605,19 @@ pub struct SetPowerProfileArgs {
 #[tauri::command]
 pub fn set_power_profile(args: SetPowerProfileArgs) -> Result<(), String> {
     adapters_power::set_power_profile(args.profile).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SetSuspendSettingsArgs {
+    pub battery_timeout_seconds: Option<u32>,
+    pub ac_timeout_seconds: Option<u32>,
+}
+
+/// Escribe o desactiva la suspensión automática en `hypridle.conf`.
+#[tauri::command]
+pub fn set_suspend_settings(args: SetSuspendSettingsArgs) -> Result<(), String> {
+    adapters_power::set_suspend_settings(args.battery_timeout_seconds, args.ac_timeout_seconds)
+        .map_err(|e| e.to_string())
 }
 
 /// Lee las configuraciones actuales del sistema desde disco y devuelve un `AppSettings`

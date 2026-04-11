@@ -1,25 +1,182 @@
 use core_model::settings::{HyprlandBind, HyprlandSettings, HyprlandWindowRule};
+use std::collections::{HashSet, VecDeque};
+use std::fs;
+use std::path::{Path, PathBuf};
 
-/// Lee `~/.config/hypr/hyprland.conf` y extrae los campos que modela
-/// `HyprlandSettings`. Cualquier campo ausente o no parseable queda en `Default`.
-/// Nunca propaga errores de I/O al llamador.
+/// Lee la cadena de configuración Hyprland (archivo principal, `source`, globs) y fusiona
+/// atajos y reglas de todas las fuentes. Los demás campos usan **último archivo gana** en orden
+/// de visita (igual que Hyprland al procesar la cadena).
 pub fn read_from_system() -> HyprlandSettings {
-    let path = match dirs_path() {
-        Some(p) => p,
-        None => return HyprlandSettings::default(),
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return HyprlandSettings::default();
     };
+    let hypr_dir = home.join(".config/hypr");
+    let main_conf = hypr_dir.join("hyprland.conf");
 
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return HyprlandSettings::default(),
-    };
+    let mut queue: VecDeque<PathBuf> = VecDeque::new();
+    if main_conf.is_file() {
+        queue.push_back(main_conf);
+    } else {
+        // Sin hyprland.conf: intentar solo snippets en hyprland.d/
+        push_hyprland_d_files(&hypr_dir, &mut queue);
+    }
 
-    parse_hyprland_conf(&content)
+    let mut ordered: Vec<PathBuf> = Vec::new();
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+
+    while let Some(path) = queue.pop_front() {
+        let real = fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+        if !real.is_file() || !seen.insert(real.clone()) {
+            continue;
+        }
+        ordered.push(real.clone());
+
+        let Ok(content) = fs::read_to_string(&real) else {
+            continue;
+        };
+        let base = real
+            .parent()
+            .unwrap_or_else(|| hypr_dir.as_path())
+            .to_path_buf();
+        for spec in extract_source_specs(&content) {
+            for candidate in resolve_source_spec(&base, &home, spec.as_str()) {
+                if candidate.is_file() {
+                    queue.push_back(candidate);
+                } else {
+                    for g in expand_glob_path(&candidate) {
+                        if g.is_file() {
+                            queue.push_back(g);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if ordered.is_empty() {
+        return HyprlandSettings::default();
+    }
+
+    let mut merged = HyprlandSettings::default();
+    let mut all_binds: Vec<HyprlandBind> = Vec::new();
+    let mut all_rules: Vec<HyprlandWindowRule> = Vec::new();
+
+    for path in &ordered {
+        let Ok(text) = fs::read_to_string(path) else {
+            continue;
+        };
+        let part = parse_hyprland_conf(&text);
+        all_binds.extend(part.keyboard.binds);
+        all_rules.extend(part.windows.rules);
+        merged.gaps_in = part.gaps_in;
+        merged.gaps_out = part.gaps_out;
+        merged.border_size = part.border_size;
+        merged.active_border_color = part.active_border_color.clone();
+        merged.inactive_border_color = part.inactive_border_color.clone();
+        merged.rounding = part.rounding;
+        merged.animations_enabled = part.animations_enabled;
+        merged.blur_enabled = part.blur_enabled;
+        merged.blur_size = part.blur_size;
+        merged.blur_passes = part.blur_passes;
+        merged.input = part.input.clone();
+    }
+    merged.keyboard.binds = all_binds;
+    merged.windows.rules = all_rules;
+    merged
 }
 
-fn dirs_path() -> Option<std::path::PathBuf> {
-    let home = std::env::var("HOME").ok()?;
-    Some(std::path::PathBuf::from(home).join(".config/hypr/hyprland.conf"))
+fn push_hyprland_d_files(hypr_dir: &Path, queue: &mut VecDeque<PathBuf>) {
+    let hyprland_d = hypr_dir.join("hyprland.d");
+    if !hyprland_d.is_dir() {
+        return;
+    }
+    let mut extra: Vec<PathBuf> = fs::read_dir(&hyprland_d)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("conf"))
+        .collect();
+    extra.sort();
+    for p in extra {
+        queue.push_back(p);
+    }
+}
+
+/// Líneas `source = …` / `exec-once` ignoradas.
+fn extract_source_specs(content: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in content.lines() {
+        let t = strip_comment(line).trim();
+        let Some(rest) = t
+            .strip_prefix("source")
+            .map(str::trim_start)
+            .and_then(|s| s.strip_prefix('='))
+            .map(str::trim)
+        else {
+            continue;
+        };
+        let spec = rest.trim_matches('"').trim_matches('\'').trim();
+        if !spec.is_empty() {
+            out.push(spec.to_string());
+        }
+    }
+    out
+}
+
+fn resolve_source_spec(base_dir: &Path, home: &Path, spec: &str) -> Vec<PathBuf> {
+    let spec = spec.trim();
+    let path = if let Some(tail) = spec.strip_prefix("~/") {
+        home.join(tail)
+    } else if spec == "~" {
+        home.to_path_buf()
+    } else if spec.starts_with('$') {
+        // $XDG_CONFIG_HOME/hypr/foo.conf — mínimo: CONFIG_HOME
+        if let Some(tail) = spec.strip_prefix("$XDG_CONFIG_HOME/") {
+            if let Ok(cfg) = std::env::var("XDG_CONFIG_HOME") {
+                PathBuf::from(cfg).join(tail)
+            } else {
+                home.join(".config").join(tail)
+            }
+        } else {
+            base_dir.join(spec.trim_start_matches("./"))
+        }
+    } else if Path::new(spec).is_absolute() {
+        PathBuf::from(spec)
+    } else {
+        base_dir.join(spec.trim_start_matches("./"))
+    };
+    vec![path]
+}
+
+fn expand_glob_path(path_with_glob: &Path) -> Vec<PathBuf> {
+    let pattern = match path_with_glob.file_name().and_then(|n| n.to_str()) {
+        Some(p) if p.contains('*') => p,
+        _ => return vec![],
+    };
+    let parent = path_with_glob
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let parts: Vec<&str> = pattern.split('*').collect();
+    let Ok(rd) = fs::read_dir(parent) else {
+        return vec![];
+    };
+    let mut out: Vec<PathBuf> = rd
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            match parts.as_slice() {
+                [pre, suf] if pre.is_empty() => name.ends_with(suf),
+                [pre, suf] if suf.is_empty() => name.starts_with(pre),
+                [pre, suf] => name.starts_with(pre) && name.ends_with(suf),
+                _ => true,
+            }
+        })
+        .collect();
+    out.sort();
+    out
 }
 
 /// Parsea el contenido de hyprland.conf y extrae `HyprlandSettings`.
@@ -40,28 +197,24 @@ pub fn parse_hyprland_conf(content: &str) -> HyprlandSettings {
         }
 
         if block_stack.is_empty() {
-            if let Some(rest) = trimmed
-                .strip_prefix("bind =")
-                .or_else(|| trimmed.strip_prefix("bind="))
-            {
-                if let Some(b) = parse_bind_value(rest.trim()) {
+            if let Some((key, value)) = split_assignment(&trimmed) {
+                if let Some(b) = parse_bind_line(key, value) {
                     s.keyboard.binds.push(b);
+                    continue;
                 }
-                continue;
-            }
-            let wr_key = trimmed
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .to_lowercase();
-            if wr_key == "windowrulev2" {
-                if let Some(eq) = trimmed.find('=') {
-                    let rest = trimmed[eq + 1..].trim();
-                    if let Some(rule) = parse_windowrulev2(rest) {
+                let wr_key = key.to_lowercase();
+                if wr_key == "windowrulev2" {
+                    if let Some(rule) = parse_windowrulev2(value) {
                         s.windows.rules.push(rule);
                     }
+                    continue;
                 }
-                continue;
+                if wr_key == "windowrule" {
+                    if let Some(rule) = parse_windowrule_v1(value) {
+                        s.windows.rules.push(rule);
+                    }
+                    continue;
+                }
             }
         }
 
@@ -175,32 +328,89 @@ fn apply_field(s: &mut HyprlandSettings, stack: &[String], key: &str, value: &st
     }
 }
 
-fn parse_bind_value(v: &str) -> Option<HyprlandBind> {
-    let parts: Vec<&str> = v
+/// `bind`, `bindl`, `binde`, `bindm`, `bindle`, `bindd`, etc.
+fn parse_bind_line(key: &str, value: &str) -> Option<HyprlandBind> {
+    let kl = key.trim().to_lowercase();
+    if !kl.starts_with("bind") {
+        return None;
+    }
+    // Evitar falsos positivos (p. ej. futuras claves que empiecen por "bind")
+    if kl.starts_with("binding") {
+        return None;
+    }
+
+    let parts: Vec<&str> = value
         .split(',')
         .map(|x| x.trim())
         .filter(|x| !x.is_empty())
         .collect();
-    if parts.len() < 3 {
-        return None;
-    }
-    let mods: Vec<String> = parts[0]
-        .split_whitespace()
-        .filter(|x| !x.is_empty())
-        .map(str::to_string)
-        .collect();
-    Some(HyprlandBind {
-        modifiers: mods,
-        key: parts[1].to_string(),
-        dispatcher: parts[2].to_string(),
-        args: if parts.len() > 3 {
-            parts[3..].join(", ")
+
+    // bindd = mods, key, dispatcher, args…, descripción (último segmento; ver wiki Hyprland).
+    if kl == "bindd" || kl == "binddr" {
+        if parts.len() < 4 {
+            return None;
+        }
+        let description = parts[parts.len() - 1].to_string();
+        let mods: Vec<String> = parts[0]
+            .split_whitespace()
+            .filter(|x| !x.is_empty())
+            .map(str::to_string)
+            .collect();
+        if mods.is_empty() {
+            return None;
+        }
+        let args = if parts.len() == 5 {
+            parts[3].to_string()
+        } else if parts.len() > 5 {
+            parts[3..parts.len() - 1].join(", ")
         } else {
             String::new()
-        },
-        description: String::new(),
-        enabled: true,
-    })
+        };
+        return Some(HyprlandBind {
+            modifiers: mods,
+            key: parts[1].to_string(),
+            dispatcher: parts[2].to_string(),
+            args,
+            description,
+            enabled: true,
+        });
+    }
+
+    if matches!(
+        kl.as_str(),
+        "bind"
+            | "bindl"
+            | "binde"
+            | "bindm"
+            | "bindle"
+            | "bindlr"
+            | "bindlte"
+            | "bindp"
+            | "bindpt"
+    ) {
+        if parts.len() < 3 {
+            return None;
+        }
+        let mods: Vec<String> = parts[0]
+            .split_whitespace()
+            .filter(|x| !x.is_empty())
+            .map(str::to_string)
+            .collect();
+        return Some(HyprlandBind {
+            modifiers: mods,
+            key: parts[1].to_string(),
+            dispatcher: parts[2].to_string(),
+            args: if parts.len() > 3 {
+                parts[3..].join(", ")
+            } else {
+                String::new()
+            },
+            description: String::new(),
+            enabled: true,
+        });
+    }
+
+    None
 }
 
 fn parse_windowrulev2(v: &str) -> Option<HyprlandWindowRule> {
@@ -228,6 +438,23 @@ fn parse_windowrulev2(v: &str) -> Option<HyprlandWindowRule> {
         }
     }
     Some(rule)
+}
+
+/// `windowrule = float, ^(kitty)$` (v1): regla + patrón de clase/título en un solo campo.
+fn parse_windowrule_v1(v: &str) -> Option<HyprlandWindowRule> {
+    let mut it = v.splitn(2, ',').map(str::trim);
+    let rule = it.next()?.to_string();
+    let pat = it.next().unwrap_or("").to_string();
+    if rule.is_empty() {
+        return None;
+    }
+    Some(HyprlandWindowRule {
+        rule,
+        class: pat,
+        title: String::new(),
+        description: "windowrule (v1)".into(),
+        enabled: true,
+    })
 }
 
 /// Convierte valores Hyprland `rgba(HHHHHHff)` o `rgb(HHHHHH)` a `#HHHHHH`.
@@ -316,7 +543,9 @@ input {
 }
 
 bind = SUPER, Q, exec, foot
+bindl = ALT, F4, killactive,
 windowrulev2 = float, class:^(kitty)$
+windowrule = opacity 0.9, ^(.*)$
 "#;
 
     #[test]
@@ -351,13 +580,15 @@ windowrulev2 = float, class:^(kitty)$
         assert!((s.input.mouse_sensitivity - (-0.25_f32)).abs() < 1e-4);
         assert!(s.input.natural_scroll);
         assert!(!s.input.touchpad_natural_scroll);
-        assert_eq!(s.keyboard.binds.len(), 1);
+        assert_eq!(s.keyboard.binds.len(), 2);
         assert_eq!(s.keyboard.binds[0].key, "Q");
         assert_eq!(s.keyboard.binds[0].dispatcher, "exec");
         assert_eq!(s.keyboard.binds[0].args, "foot");
-        assert_eq!(s.windows.rules.len(), 1);
+        assert_eq!(s.keyboard.binds[1].dispatcher, "killactive");
+        assert_eq!(s.windows.rules.len(), 2);
         assert_eq!(s.windows.rules[0].rule, "float");
         assert_eq!(s.windows.rules[0].class, "^(kitty)$");
+        assert!(s.windows.rules[1].rule.contains("opacity"));
     }
 
     #[test]
@@ -381,5 +612,12 @@ windowrulev2 = float, class:^(kitty)$
         let s = parse_hyprland_conf("");
         let d = HyprlandSettings::default();
         assert_eq!(s.gaps_in, d.gaps_in);
+    }
+
+    #[test]
+    fn extract_source_specs_trims_quotes() {
+        let txt = "  source = ./foo.conf  \n# x\nsource=\"/abs/bar.conf\"\n";
+        let specs = extract_source_specs(txt);
+        assert_eq!(specs, vec!["./foo.conf", "/abs/bar.conf"]);
     }
 }

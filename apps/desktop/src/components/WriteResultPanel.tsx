@@ -130,7 +130,7 @@ const Row: FC<{
 );
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { marginTop: 20 },
+  container: { marginTop: 20, width: "100%", maxWidth: "100%" },
   label: {
     fontSize: 11,
     color: "#6b7280",

@@ -45,15 +45,14 @@ struct ScannedRow {
     entry: WallpaperCatalogEntry,
 }
 
-/// Raíces allowlist: solo directorios que existen bajo `home`.
+/// Raíces allowlist: solo bibliotecas típicas de Wallpaper Engine bajo `home`.
 pub fn default_roots(home: &Path) -> Vec<PathBuf> {
-    let candidates = [
-        home.join("Pictures"),
-        home.join("Wallpapers"),
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    candidates.extend([
         home.join(".local/share/wallpaper_engine/library"),
         home.join(".steam/steam/steamapps/common/wallpaper_engine/projects/defaultproject"),
         home.join(".local/share/Steam/steamapps/common/wallpaper_engine/projects/defaultproject"),
-    ];
+    ]);
     candidates.into_iter().filter(|p| p.is_dir()).collect()
 }
 
@@ -84,22 +83,6 @@ fn make_id(prefix: &str, root_index: usize, rel: &str) -> WallpaperId {
     let hex = format!("{:x}", h.finalize());
     let short: String = hex.chars().take(16).collect();
     WallpaperId(format!("{prefix}:r{root_index}:{short}"))
-}
-
-fn kind_for_path(path: &Path, is_we_project: bool) -> WallpaperKind {
-    if is_we_project {
-        return WallpaperKind::WallpaperEngineProject;
-    }
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|s| s.to_ascii_lowercase())
-        .unwrap_or_default();
-    match ext.as_str() {
-        "jpg" | "jpeg" | "png" | "webp" | "bmp" | "gif" => WallpaperKind::Image,
-        "mp4" | "webm" | "mkv" | "mov" => WallpaperKind::Video,
-        _ => WallpaperKind::Other,
-    }
 }
 
 fn walk_dir(
@@ -149,58 +132,17 @@ fn walk_inner(
             if pj.is_file() {
                 push_we_project(base, &path, root_index, max_total, rows, warnings)?;
             } else {
-                walk_inner(base, &path, root_index, depth + 1, max_depth, max_total, rows, warnings)?;
+                walk_inner(
+                    base,
+                    &path,
+                    root_index,
+                    depth + 1,
+                    max_depth,
+                    max_total,
+                    rows,
+                    warnings,
+                )?;
             }
-        } else if meta.is_file() {
-            let rel = path.strip_prefix(base).ok().and_then(|p| p.to_str());
-            let Some(rel) = rel else { continue };
-            if rel.contains("..") {
-                continue;
-            }
-            let rel_owned = rel.to_string();
-            let k = kind_for_path(&path, false);
-            if matches!(k, WallpaperKind::Other) {
-                continue;
-            }
-            let id = make_id("loc", root_index, &rel_owned);
-            let mtime = meta
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0);
-            let title = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("wallpaper")
-                .to_string();
-            let missing = !path.exists();
-            let entry = WallpaperCatalogEntry {
-                id: id.clone(),
-                source: WallpaperSource::LocalAllowlistedRoot,
-                kind: k,
-                metadata: WallpaperMetadata {
-                    title,
-                    width: None,
-                    height: None,
-                    duration_ms: None,
-                    dominant_color: None,
-                    palette_preview: None,
-                    engine_project_id: None,
-                },
-                flags: WallpaperEntryFlags {
-                    missing_file: missing,
-                    thumbnail_missing: true,
-                    parse_error: false,
-                },
-                sort_key_mtime: mtime,
-            };
-            rows.push(ScannedRow {
-                abs_path: path,
-                root_index,
-                rel_path: rel_owned,
-                entry,
-            });
         }
     }
     Ok(())
@@ -267,7 +209,10 @@ fn push_we_project(
         entry,
     });
     if parse_error {
-        warnings.push(format!("we project.json unreadable: {}", project_dir.display()));
+        warnings.push(format!(
+            "we project.json unreadable: {}",
+            project_dir.display()
+        ));
     }
     Ok(())
 }
@@ -277,10 +222,19 @@ pub fn scan_catalog(
     home: &Path,
     filter: &WallpaperFilter,
     limit: Option<usize>,
-) -> Result<(WallpaperCollection, HashMap<String, PathBuf>, CatalogDiskFile), CatalogError> {
+) -> Result<
+    (
+        WallpaperCollection,
+        HashMap<String, PathBuf>,
+        CatalogDiskFile,
+    ),
+    CatalogError,
+> {
     let roots = default_roots(home);
     let fp = fingerprint_roots(&roots);
-    let max = limit.unwrap_or(MAX_CATALOG_ENTRIES).min(MAX_CATALOG_ENTRIES);
+    let max = limit
+        .unwrap_or(MAX_CATALOG_ENTRIES)
+        .min(MAX_CATALOG_ENTRIES);
     let mut rows = Vec::new();
     let mut warnings = Vec::new();
 
@@ -421,20 +375,39 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn scan_finds_png_under_pictures() {
+    fn scan_finds_we_project_under_library() {
         let tmp = tempdir().unwrap();
         let home = tmp.path();
-        let pics = home.join("Pictures");
-        fs::create_dir_all(&pics).unwrap();
-        fs::write(pics.join("a.png"), [0x89u8, 0x50, 0x4e, 0x47]).unwrap();
+        let library = home.join(".local/share/wallpaper_engine/library");
+        let project = library.join("cool-project");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("project.json"), "{}\n").unwrap();
 
         let roots = default_roots(home);
-        assert!(roots.iter().any(|p| p.ends_with("Pictures")));
+        assert!(roots
+            .iter()
+            .any(|p| p.ends_with("wallpaper_engine/library")));
 
         let (col, map, _) = scan_catalog(home, &WallpaperFilter::default(), None).unwrap();
         assert_eq!(col.entries.len(), 1);
         assert!(map.contains_key(col.entries[0].id.as_str()));
-        assert_eq!(col.entries[0].kind, WallpaperKind::Image);
+        assert_eq!(col.entries[0].kind, WallpaperKind::WallpaperEngineProject);
+        assert_eq!(
+            col.entries[0].source,
+            WallpaperSource::WallpaperEngineLibrary
+        );
+    }
+
+    #[test]
+    fn scan_ignores_raw_images_inside_we_library() {
+        let tmp = tempdir().unwrap();
+        let home = tmp.path();
+        let library = home.join(".local/share/wallpaper_engine/library");
+        fs::create_dir_all(&library).unwrap();
+        fs::write(library.join("screenshot.png"), [0x89u8, 0x50, 0x4e, 0x47]).unwrap();
+
+        let (col, _, _) = scan_catalog(home, &WallpaperFilter::default(), None).unwrap();
+        assert!(col.entries.is_empty());
     }
 
     #[test]

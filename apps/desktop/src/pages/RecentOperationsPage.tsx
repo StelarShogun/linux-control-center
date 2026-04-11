@@ -4,6 +4,7 @@ import type { JournalOperationAction } from "../types/generated/JournalOperation
 import type { OperationJournalEntry } from "../types/generated/OperationJournalEntry";
 import type { BackupAuditReport } from "../tauri/types";
 import { auditConfigBackups, deleteOrphanBackup, listRecentOperations } from "../tauri/api";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 /** Todas las acciones del journal (mantener alineado con `JournalOperationAction` generado). */
 const ALL_JOURNAL_ACTIONS: JournalOperationAction[] = [
@@ -23,17 +24,17 @@ interface Props {
 function actionLabel(action: JournalOperationAction): string {
   switch (action) {
     case "apply_sandbox":
-      return "Apply sandbox";
+      return "Sandbox";
     case "apply_real":
-      return "Apply real";
+      return "Aplicar real";
     case "apply_live":
-      return "Apply live";
+      return "Aplicar en vivo";
     case "apply_live_waybar":
-      return "Waybar live";
+      return "Waybar en vivo";
     case "apply_theme":
       return "Tema";
     case "apply_wallpaper":
-      return "Wallpaper";
+      return "Fondo de pantalla";
     case "rollback":
       return "Rollback";
     default: {
@@ -384,7 +385,7 @@ const RecentOperationsPage: FC<Props> = ({ backendStatus }) => {
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: "100%" },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 16, lineHeight: 1.6 },
   toolbar: {
@@ -490,7 +491,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 9,
     color: "#9ca3af",
     verticalAlign: "top" as const,
-    maxWidth: 200,
+    maxWidth: 420,
     wordBreak: "break-all" as const,
   },
   tdError: {
@@ -498,7 +499,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #252840",
     color: "#fca5a5",
     fontSize: 10,
-    maxWidth: 220,
+    maxWidth: 360,
     wordBreak: "break-word" as const,
     verticalAlign: "top" as const,
   },

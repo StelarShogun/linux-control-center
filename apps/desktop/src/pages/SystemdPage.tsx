@@ -1,6 +1,7 @@
-import { useEffect, useState, type FC } from "react";
+import { useCallback, useEffect, useState, type FC } from "react";
 import type { BackendStatus } from "../types/backend";
 import { type ListUnitsResponse, type UnitStatusDto, listSystemdUnits } from "../tauri/api";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   backendStatus: BackendStatus;
@@ -17,7 +18,7 @@ const SystemdPage: FC<Props> = ({ backendStatus }) => {
   const [filterActiveOnly, setFilterActiveOnly] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<UnitStatusDto | null>(null);
 
-  const fetchUnits = async () => {
+  const fetchUnits = useCallback(async () => {
     if (backendStatus !== "ready") return;
     setLoading(true);
     setError(null);
@@ -30,12 +31,11 @@ const SystemdPage: FC<Props> = ({ backendStatus }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [backendStatus, filterKinds, filterActiveOnly]);
 
   useEffect(() => {
-    fetchUnits();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backendStatus]);
+    void fetchUnits();
+  }, [fetchUnits]);
 
   const toggleKind = (kind: string) => {
     setFilterKinds((prev) =>
@@ -84,10 +84,10 @@ const SystemdPage: FC<Props> = ({ backendStatus }) => {
                 onChange={(e) => setFilterActiveOnly(e.target.checked)}
                 style={{ marginRight: 6 }}
               />
-              Active only
+              Solo activas
             </label>
-            <button style={styles.refreshBtn} onClick={fetchUnits} disabled={loading}>
-              {loading ? "Loading…" : "Refresh"}
+            <button style={styles.refreshBtn} onClick={() => void fetchUnits()} disabled={loading}>
+              {loading ? "Cargando…" : "Actualizar"}
             </button>
           </div>
 
@@ -110,7 +110,7 @@ const SystemdPage: FC<Props> = ({ backendStatus }) => {
           <div style={styles.layout}>
             <div style={styles.listPane}>
               {units.length === 0 && !loading && (
-                <div style={styles.empty}>No units match the current filters.</div>
+                <div style={styles.empty}>Ninguna unidad coincide con los filtros.</div>
               )}
               {units.map((u) => (
                 <button
@@ -127,24 +127,32 @@ const SystemdPage: FC<Props> = ({ backendStatus }) => {
               ))}
             </div>
 
-            {selectedUnit && (
-              <div style={styles.detailPane}>
-                <div style={styles.detailHeader}>{selectedUnit.name}</div>
-                <p style={styles.detailDesc}>{selectedUnit.description}</p>
-                <table style={styles.detailTable}>
-                  <tbody>
-                    <DetailRow label="Kind" value={selectedUnit.kind} />
-                    <DetailRow label="Load state" value={selectedUnit.load_state} />
-                    <DetailRow label="Active state" value={selectedUnit.active_state} />
-                    <DetailRow label="Sub state" value={selectedUnit.sub_state} />
-                    <DetailRow label="Unit file" value={selectedUnit.unit_file_state} />
-                    {selectedUnit.fragment_path && (
-                      <DetailRow label="Fragment path" value={selectedUnit.fragment_path} />
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <div style={styles.detailPane}>
+              {selectedUnit ? (
+                <>
+                  <div style={styles.detailHeader}>{selectedUnit.name}</div>
+                  <p style={styles.detailDesc}>{selectedUnit.description}</p>
+                  <table style={styles.detailTable}>
+                    <tbody>
+                      <DetailRow label="Tipo" value={selectedUnit.kind} />
+                      <DetailRow label="Load state" value={selectedUnit.load_state} />
+                      <DetailRow label="Active state" value={selectedUnit.active_state} />
+                      <DetailRow label="Sub state" value={selectedUnit.sub_state} />
+                      <DetailRow label="Unit file" value={selectedUnit.unit_file_state} />
+                      {selectedUnit.fragment_path && (
+                        <DetailRow label="Fragment path" value={selectedUnit.fragment_path} />
+                      )}
+                    </tbody>
+                  </table>
+                </>
+              ) : (
+                <div style={styles.detailPlaceholder}>
+                  {units.length === 0
+                    ? "Sin unidades en la lista."
+                    : "Selecciona una unidad de la lista para ver detalles."}
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}
@@ -175,7 +183,7 @@ const DetailRow: FC<{ label: string; value: string }> = ({ label, value }) => (
 );
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: 900 },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 24 },
   toolbar: {
@@ -246,10 +254,18 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 12px",
     marginBottom: 12,
   },
-  layout: { display: "flex", gap: 16, alignItems: "flex-start" },
+  layout: {
+    display: "flex",
+    gap: 16,
+    alignItems: "stretch",
+    width: "100%",
+    minHeight: "min(72vh, 720px)",
+  },
   listPane: {
-    flex: "0 0 320px",
-    maxHeight: 520,
+    flex: "1 1 32%",
+    minWidth: "min(100%, 260px)",
+    maxWidth: "min(100%, 480px)",
+    maxHeight: "calc(100vh - 220px)",
     overflowY: "auto",
     border: "1px solid #2e3250",
     borderRadius: 8,
@@ -289,12 +305,19 @@ const styles: Record<string, React.CSSProperties> = {
   badgeFailed: { borderColor: "#3a1f1f", color: "#fecaca", background: "#1f0b0b" },
   badgeOther: { borderColor: "#2e3250", color: "#6b7280", background: "#151722" },
   detailPane: {
-    flex: 1,
+    flex: "1 1 58%",
     border: "1px solid #2e3250",
     borderRadius: 8,
     background: "#151722",
     padding: 20,
     minWidth: 0,
+    minHeight: 200,
+  },
+  detailPlaceholder: {
+    fontSize: 13,
+    color: "#6b7280",
+    lineHeight: 1.6,
+    padding: "24px 8px",
   },
   detailHeader: {
     fontSize: 14,

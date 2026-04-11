@@ -1,10 +1,8 @@
 use core_model::settings::WaybarSettings;
 
-/// Lee `~/.config/waybar/config.jsonc` y extrae los campos que modela
-/// `WaybarSettings`. Cualquier campo ausente o no parseable queda en `Default`.
-/// Nunca propaga errores de I/O al llamador.
+/// Lee `~/.config/waybar/config.jsonc` (o `config`) y fusiona colores desde `style.css` si existe.
 pub fn read_from_system() -> WaybarSettings {
-    let path = match dirs_path() {
+    let path = match config_json_path() {
         Some(p) => p,
         None => return WaybarSettings::default(),
     };
@@ -14,12 +12,17 @@ pub fn read_from_system() -> WaybarSettings {
         Err(_) => return WaybarSettings::default(),
     };
 
-    parse_waybar_config(&content)
+    let mut s = parse_waybar_config(&content);
+    if let Some(style_path) = style_css_path() {
+        if let Ok(css) = std::fs::read_to_string(&style_path) {
+            merge_colors_from_style_css(&mut s, &css);
+        }
+    }
+    s
 }
 
-fn dirs_path() -> Option<std::path::PathBuf> {
+fn config_json_path() -> Option<std::path::PathBuf> {
     let home = std::env::var("HOME").ok()?;
-    // Waybar acepta tanto config.jsonc como config
     let base = std::path::PathBuf::from(home).join(".config/waybar");
     for name in &["config.jsonc", "config"] {
         let p = base.join(name);
@@ -27,8 +30,85 @@ fn dirs_path() -> Option<std::path::PathBuf> {
             return Some(p);
         }
     }
-    // Si ninguno existe devolvemos la ruta preferida para que el read falle limpiamente
     Some(base.join("config.jsonc"))
+}
+
+fn style_css_path() -> Option<std::path::PathBuf> {
+    let home = std::env::var("HOME").ok()?;
+    let base = std::path::PathBuf::from(home).join(".config/waybar");
+    let p = base.join("style.css");
+    if p.is_file() {
+        Some(p)
+    } else {
+        None
+    }
+}
+
+/// Best-effort: toma el primer `#rrggbb` tras selectores conocidos.
+fn merge_colors_from_style_css(s: &mut WaybarSettings, css: &str) {
+    let lower = css.to_lowercase();
+    if let Some(hex) = hex_in_block_body(&lower, "window#waybar", "background-color") {
+        s.bar_background = hex;
+    }
+    if let Some(hex) = hex_in_block_body(&lower, "window#waybar", "color") {
+        s.bar_foreground = hex;
+    }
+    if let Some(hex) = hex_in_block_body(&lower, "#workspaces button.active", "background-color") {
+        s.accent = hex;
+    } else if let Some(hex) = hex_in_block_body(&lower, "#workspaces button.active", "background") {
+        s.accent = hex;
+    }
+    if let Some(hex) = hex_in_block_body(&lower, "#workspaces button", "background-color") {
+        s.module_background = hex;
+    } else if let Some(hex) = hex_in_block_body(&lower, "#workspaces button", "background") {
+        s.module_background = hex;
+    }
+}
+
+/// Busca `prop` en líneas del bloque (evita confundir `color` con `background-color`).
+fn hex_in_block_body(css_lower: &str, block_needle: &str, prop: &str) -> Option<String> {
+    let pos = css_lower.find(block_needle)?;
+    let mut tail = &css_lower[pos + block_needle.len()..];
+    let brace = tail.find('{')?;
+    tail = &tail[brace + 1..];
+    let slice_end = tail.find('}').unwrap_or(800).min(1200);
+    let slice = &tail[..slice_end];
+    for line in slice.lines() {
+        let l = line.trim();
+        let l = l.strip_suffix(';').unwrap_or(l).trim();
+        if prop == "color" {
+            if l.starts_with("color:")
+                && !l.starts_with("background-color:")
+                && !l.starts_with("background:")
+            {
+                return extract_hex_color(&l["color:".len()..]);
+            }
+            continue;
+        }
+        let prefix = format!("{prop}:");
+        if l.starts_with(&prefix) {
+            return extract_hex_color(&l[prefix.len()..]);
+        }
+        let prefix2 = format!("{prop} :");
+        if let Some(rest) = l.strip_prefix(&prefix2) {
+            return extract_hex_color(rest);
+        }
+    }
+    None
+}
+
+fn extract_hex_color(s: &str) -> Option<String> {
+    let s = s.trim_start();
+    for (i, _) in s.match_indices('#') {
+        let rest = &s[i..];
+        if rest.len() >= 7 {
+            let cand = &rest[..7];
+            if cand[1..].chars().all(|c| c.is_ascii_hexdigit()) {
+                return Some(cand.to_lowercase());
+            }
+        }
+    }
+    None
 }
 
 /// Parsea el contenido JSONC de waybar config.
@@ -216,5 +296,27 @@ mod tests {
         let stripped = strip_jsonc_comments(src);
         assert!(!stripped.contains("block"));
         assert!(stripped.contains("\"key\": 2"));
+    }
+
+    #[test]
+    fn merge_colors_from_css() {
+        let css = r#"
+window#waybar {
+  background-color: #2a2b3c;
+  color: #eeeeff;
+}
+#workspaces button {
+  background-color: #444455;
+}
+#workspaces button.active {
+  background-color: #88c0d0;
+}
+"#;
+        let mut s = WaybarSettings::default();
+        merge_colors_from_style_css(&mut s, css);
+        assert_eq!(s.bar_background, "#2a2b3c");
+        assert_eq!(s.bar_foreground, "#eeeeff");
+        assert_eq!(s.module_background, "#444455");
+        assert_eq!(s.accent, "#88c0d0");
     }
 }

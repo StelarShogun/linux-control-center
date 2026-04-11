@@ -9,4 +9,4 @@ profile_label: string, battery_percent: number | null, on_ac: boolean | null,
 /**
  * `powerprofilesctl` | `sysfs` | `unavailable`
  */
-source: string, };
+source: string, can_set_profile: boolean, available_profiles: Array<PowerProfileKind>, };

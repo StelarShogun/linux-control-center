@@ -15,6 +15,7 @@ import {
 import type { ApplyLiveResult, ApplyToRealPathResult } from "../tauri/types";
 import OpMessage, { type OpMsg } from "../components/OpMessage";
 import WriteResultPanel from "../components/WriteResultPanel";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   settings: AppSettings;
@@ -590,7 +591,7 @@ const BTN_BASE: React.CSSProperties = {
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: 680 },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 24, lineHeight: 1.6 },
   statusBanner: {
@@ -727,6 +728,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#88c0d0",
     overflow: "auto",
     fontFamily: "monospace",
+    maxHeight: "min(55vh, 560px)",
   },
 };
 

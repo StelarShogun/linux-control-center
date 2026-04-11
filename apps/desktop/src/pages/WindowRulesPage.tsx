@@ -2,6 +2,7 @@ import { useState, type FC } from "react";
 import type { AppSettings, HyprlandWindowRule } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
 import { saveSettings } from "../tauri/api";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   settings: AppSettings;
@@ -53,8 +54,8 @@ const WindowRulesPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
     <div style={styles.page}>
       <h1 style={styles.heading}>Reglas de ventana</h1>
       <p style={styles.note}>
-        Se exportan como <code>windowrulev2 = regla, class:…, title:…</code>. La clase/título suelen ser
-        expresiones como <code>^(kitty)$</code>.
+        Se exportan como <code>windowrulev2 = …</code>. «Sync desde sistema» importa{" "}
+        <code>windowrulev2</code> y <code>windowrule</code> (v1) desde tu cadena de configs Hyprland.
       </p>
       {msg && (
         <p style={{ ...styles.note, color: msg.startsWith("Error") ? "#f87171" : "#4ade80" }}>{msg}</p>
@@ -73,9 +74,15 @@ const WindowRulesPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
         </button>
       </div>
       {rules.length === 0 ? (
-        <p style={styles.note}>No hay reglas.</p>
+        <div style={styles.emptyPanel}>
+          <p style={styles.note}>No hay reglas en la app.</p>
+          <p style={styles.noteMuted}>
+            Usa «Sync desde sistema» para leer <code>windowrulev2</code> / <code>windowrule</code> desde tus
+            archivos Hyprland.
+          </p>
+        </div>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div style={styles.tableWrap}>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -83,6 +90,7 @@ const WindowRulesPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
                 <th style={styles.th}>Regla</th>
                 <th style={styles.th}>Class</th>
                 <th style={styles.th}>Title</th>
+                <th style={styles.th}>Nota</th>
                 <th style={styles.th} />
               </tr>
             </thead>
@@ -131,6 +139,18 @@ const WindowRulesPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
                         next[idx] = { ...r, title: e.target.value };
                         setRules(next);
                       }}
+                    />
+                  </td>
+                  <td style={styles.tdMono}>
+                    <input
+                      style={styles.in}
+                      value={r.description}
+                      onChange={(e) => {
+                        const next = [...rules];
+                        next[idx] = { ...r, description: e.target.value };
+                        setRules(next);
+                      }}
+                      placeholder="origen / nota"
                     />
                   </td>
                   <td style={styles.td}>
@@ -199,9 +219,26 @@ const WindowRulesPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: "100%" },
+  page: {
+    ...PAGE_BASE,
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+  },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 16 },
+  noteMuted: { fontSize: 12, color: "#4b5563", marginTop: 8, lineHeight: 1.5 },
+  emptyPanel: {
+    flex: 1,
+    minHeight: 200,
+    padding: 24,
+    borderRadius: 8,
+    border: "1px dashed #2e3250",
+    background: "#151722",
+  },
+  tableWrap: { overflow: "auto", flex: 1, minHeight: 0, width: "100%" },
   toolbar: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" },
   btn: {
     padding: "6px 14px",

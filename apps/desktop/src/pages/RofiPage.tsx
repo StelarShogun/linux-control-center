@@ -10,6 +10,7 @@ import {
 import type { ApplyToRealPathResult } from "../tauri/types";
 import OpMessage, { type OpMsg } from "../components/OpMessage";
 import WriteResultPanel from "../components/WriteResultPanel";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   settings: AppSettings;
@@ -251,7 +252,7 @@ const BTN_BASE: React.CSSProperties = {
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: 680 },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 24, lineHeight: 1.6 },
   fieldNote: { fontSize: 12, color: "#6b7280", margin: "4px 0 0 0" },
@@ -273,7 +274,17 @@ const styles: Record<string, React.CSSProperties> = {
   saveBtnAmber: { ...BTN_BASE, background: "#1a1500", borderColor: "#4a3f20", color: "#fbbf24" },
   previewContainer: { marginTop: 24 },
   previewLabel: { fontSize: 11, color: "#6b7280", marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.06em" },
-  preview: { background: "#151722", border: "1px solid #2e3250", borderRadius: 8, padding: 16, fontSize: 12, color: "#88c0d0", overflow: "auto", fontFamily: "monospace" },
+  preview: {
+    background: "#151722",
+    border: "1px solid #2e3250",
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 12,
+    color: "#88c0d0",
+    overflow: "auto",
+    fontFamily: "monospace",
+    maxHeight: "min(55vh, 560px)",
+  },
 };
 
 export default RofiPage;

@@ -2,6 +2,7 @@ import { useState, type FC } from "react";
 import type { AppSettings, AppearanceSettings } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
 import { saveSettings } from "../tauri/api";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   settings: AppSettings;
@@ -26,9 +27,10 @@ const AppearancePage: FC<Props> = ({ settings, onSettingsChange, backendStatus }
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Appearance</h1>
+      <h1 style={styles.heading}>Apariencia</h1>
       <p style={styles.note}>
-        Fase 2: settings cargados desde backend (si está disponible). No se aplica al sistema real.
+        Ajustes de tema, fuente y cursor guardados en la app. Usa «Sync desde sistema» en la barra superior
+        para importar valores actuales de Hyprland/Waybar/Rofi cuando el backend esté activo.
       </p>
       {backendStatus === "unavailable" && (
         <p style={{ ...styles.note, marginTop: -24 }}>
@@ -172,7 +174,7 @@ const Field: FC<{ label: string; children: React.ReactNode }> = ({
 );
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: 640 },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 32 },
   section: { marginBottom: 32 },
@@ -243,6 +245,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: "#6b7280",
     overflow: "auto",
+    maxHeight: "min(45vh, 420px)",
   },
 };
 

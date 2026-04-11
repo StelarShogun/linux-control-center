@@ -95,12 +95,14 @@ const App: FC = () => {
           )}
         </div>
         <main style={styles.main}>
-          <PageRouter
-            current={currentPage}
-            settings={settings}
-            onSettingsChange={setSettings}
-            backendStatus={backendStatus}
-          />
+          <div style={styles.pageFrame}>
+            <PageRouter
+              current={currentPage}
+              settings={settings}
+              onSettingsChange={setSettings}
+              backendStatus={backendStatus}
+            />
+          </div>
         </main>
       </div>
     </div>
@@ -247,7 +249,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
   main: {
     flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+    width: "100%",
     overflow: "auto",
+    display: "flex",
+    flexDirection: "column",
+  },
+  pageFrame: {
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
   },
 };
 

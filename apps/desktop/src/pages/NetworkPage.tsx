@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FC } from "react";
 import type { BackendStatus } from "../types/backend";
 import type { NetworkInterface } from "../types/generated";
 import { listNetworkInterfaces } from "../tauri/api";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   backendStatus: BackendStatus;
@@ -86,7 +87,7 @@ const NetworkPage: FC<Props> = ({ backendStatus }) => {
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: 900 },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 16, lineHeight: 1.6 },
   toolbar: { marginBottom: 16 },

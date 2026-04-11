@@ -18,6 +18,7 @@ export type { NetworkInterface } from "./NetworkInterface";
 export type { NetworkInterfaceKind } from "./NetworkInterfaceKind";
 export type { PowerProfileKind } from "./PowerProfileKind";
 export type { PowerStatus } from "./PowerStatus";
+export type { SuspendSettings } from "./SuspendSettings";
 export type { WaybarSettings } from "./WaybarSettings";
 export type { RofiSettings } from "./RofiSettings";
 export type { ProfileMetadata } from "./ProfileMetadata";

@@ -2,6 +2,7 @@ import { useState, type FC } from "react";
 import type { AppSettings, HyprlandBind } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
 import { saveSettings } from "../tauri/api";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   settings: AppSettings;
@@ -54,8 +55,10 @@ const KeybindingsPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
     <div style={styles.page}>
       <h1 style={styles.heading}>Atajos (Hyprland)</h1>
       <p style={styles.note}>
-        Se exportan como <code>bind = …</code> en el include gestionado. Modificadores separados por espacio
-        (p. ej. SUPER SHIFT).
+        Se exportan como <code>bind = …</code> en el include gestionado. Usa{" "}
+        <strong>«Sync desde sistema»</strong> arriba para importar <code>hyprland.conf</code>, archivos{" "}
+        <code>source = …</code> y <code>hyprland.d/*.conf</code> (incl. <code>bindl</code>,{" "}
+        <code>bindd</code>, etc.).
       </p>
       {msg && (
         <p style={{ ...styles.note, color: msg.startsWith("Error") ? "#f87171" : "#4ade80" }}>{msg}</p>
@@ -74,9 +77,14 @@ const KeybindingsPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
         </button>
       </div>
       {binds.length === 0 ? (
-        <p style={styles.note}>No hay atajos definidos.</p>
+        <div style={styles.emptyPanel}>
+          <p style={styles.note}>No hay atajos en la app todavía.</p>
+          <p style={styles.noteMuted}>
+            Pulsa «Sync desde sistema» en la barra superior para leer tus binds reales desde disco.
+          </p>
+        </div>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div style={styles.tableWrap}>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -85,6 +93,7 @@ const KeybindingsPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
                 <th style={styles.th}>Tecla</th>
                 <th style={styles.th}>Dispatcher</th>
                 <th style={styles.th}>Args</th>
+                <th style={styles.th}>Nota</th>
                 <th style={styles.th} />
               </tr>
             </thead>
@@ -145,6 +154,18 @@ const KeybindingsPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
                         next[idx] = { ...b, args: e.target.value };
                         setBinds(next);
                       }}
+                    />
+                  </td>
+                  <td style={styles.tdMono}>
+                    <input
+                      style={styles.in}
+                      value={b.description}
+                      onChange={(e) => {
+                        const next = [...binds];
+                        next[idx] = { ...b, description: e.target.value };
+                        setBinds(next);
+                      }}
+                      placeholder="bindd / nota"
                     />
                   </td>
                   <td style={styles.td}>
@@ -226,9 +247,26 @@ const KeybindingsPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: "100%" },
+  page: {
+    ...PAGE_BASE,
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+  },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 16 },
+  noteMuted: { fontSize: 12, color: "#4b5563", marginTop: 8, lineHeight: 1.5 },
+  emptyPanel: {
+    flex: 1,
+    minHeight: 200,
+    padding: 24,
+    borderRadius: 8,
+    border: "1px dashed #2e3250",
+    background: "#151722",
+  },
+  tableWrap: { overflow: "auto", flex: 1, minHeight: 0, width: "100%" },
   toolbar: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" },
   btn: {
     padding: "6px 14px",

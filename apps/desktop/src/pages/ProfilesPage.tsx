@@ -2,6 +2,7 @@ import { useState, type FC } from "react";
 import type { AppSettings } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
 import { saveProfile } from "../tauri/api";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   settings: AppSettings;
@@ -19,9 +20,10 @@ const ProfilesPage: FC<Props> = ({ settings, backendStatus }) => {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Profiles</h1>
+      <h1 style={styles.heading}>Perfiles</h1>
       <p style={styles.note}>
-        Fase 2: snapshots y perfiles persistidos localmente vía backend. No se aplica al sistema real.
+        Guarda copias con nombre de la configuración actual en el directorio de datos de la app (Tauri).
+        No modifica archivos del sistema hasta que uses aplicar en otras pantallas.
       </p>
 
       {backendStatus === "unavailable" && (
@@ -34,7 +36,7 @@ const ProfilesPage: FC<Props> = ({ settings, backendStatus }) => {
       )}
 
       <section>
-        <h2 style={styles.detailTitle}>Save profile</h2>
+        <h2 style={styles.detailTitle}>Guardar perfil</h2>
         <p style={{ ...styles.note, marginBottom: 12 }}>
           Guarda los settings actuales como perfil en disco (local app data).
         </p>
@@ -98,7 +100,7 @@ const ProfilesPage: FC<Props> = ({ settings, backendStatus }) => {
             }
           }}
         >
-          Save profile from current settings
+          Guardar perfil desde la configuración actual
         </button>
       </section>
 
@@ -108,7 +110,7 @@ const ProfilesPage: FC<Props> = ({ settings, backendStatus }) => {
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: 900 },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 32 },
   detailTitle: {
@@ -155,7 +157,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     color: "#6b7280",
     overflow: "auto",
-    maxHeight: 320,
+    maxHeight: "min(50vh, 480px)",
   },
   primaryBtn: {
     background: "#2e3250",

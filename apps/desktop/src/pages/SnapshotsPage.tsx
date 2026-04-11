@@ -3,6 +3,7 @@ import type { AppSettings } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
 import { createSnapshot, listSnapshots, restoreSnapshot } from "../tauri/api";
 import type { SnapshotInfo } from "../tauri/types";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   settings: AppSettings;
@@ -220,7 +221,7 @@ const SnapshotsPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 40px", maxWidth: 1100 },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
   note: { fontSize: 12, color: "#6b7280", marginBottom: 20, lineHeight: 1.5 },
   callout: {
@@ -244,9 +245,10 @@ const styles: Record<string, React.CSSProperties> = {
   bannerError: { background: "#1f0b0b", color: "#fecaca", borderColor: "#3a1f1f" },
   grid: {
     display: "grid",
-    gridTemplateColumns: "1.2fr 1fr",
+    gridTemplateColumns: "minmax(280px, 1.1fr) minmax(280px, 1.4fr)",
     gap: 16,
     alignItems: "start",
+    width: "100%",
   },
   panel: {
     background: "#151722",

@@ -35,7 +35,7 @@ import type {
   ThemePreviewDto,
 } from "./types";
 import type { NetworkInterface } from "../types/generated";
-import type { PowerProfileKind, PowerStatus } from "../types/generated";
+import type { PowerProfileKind, PowerStatus, SuspendSettings } from "../types/generated";
 
 // ─── Hyprland migration types ────────────────────────────────────────────────
 
@@ -149,6 +149,11 @@ export async function previewHyprlandConfig(): Promise<string> {
 /** Returns the Waybar config JSON that would be generated from current settings. Read-only. */
 export async function previewWaybarConfig(): Promise<string> {
   return await invoke<string>("preview_waybar_config");
+}
+
+/** Contenido de ~/.config/waybar/style.css si existe (solo lectura). */
+export async function readWaybarStyleDisk(): Promise<string | null> {
+  return await invoke<string | null>("read_waybar_style_disk");
 }
 
 /** Returns the Rofi config .rasi that would be generated from current settings. Read-only. */
@@ -276,8 +281,25 @@ export async function getPowerStatus(): Promise<PowerStatus> {
   return await invoke<PowerStatus>("get_power_status");
 }
 
+/** Lee la configuración actual de suspensión automática. */
+export async function getSuspendSettings(): Promise<SuspendSettings> {
+  return await invoke<SuspendSettings>("get_suspend_settings");
+}
+
 /** Cambia perfil vía powerprofilesctl. */
 export async function setPowerProfile(profile: PowerProfileKind): Promise<void> {
   return await invoke<void>("set_power_profile", { args: { profile } });
 }
 
+/** Configura o desactiva la suspensión automática en hypridle.conf. */
+export async function setSuspendSettings(
+  batteryTimeoutSeconds: number | null,
+  acTimeoutSeconds: number | null
+): Promise<void> {
+  return await invoke<void>("set_suspend_settings", {
+    args: {
+      battery_timeout_seconds: batteryTimeoutSeconds,
+      ac_timeout_seconds: acTimeoutSeconds,
+    },
+  });
+}

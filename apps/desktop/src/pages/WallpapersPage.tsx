@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useState, type FC } from "react";
+import { useCallback, useEffect, useRef, useState, type FC } from "react";
 import type { BackendStatus } from "../types/backend";
 import type { WallpaperBackendStatus } from "../types/generated/WallpaperBackendStatus";
 import type { WallpaperCatalogEntry } from "../types/generated/WallpaperCatalogEntry";
 import type { WallpaperCollection } from "../types/generated/WallpaperCollection";
-import type { WallpaperFilter } from "../types/generated/WallpaperFilter";
-import type { WallpaperKind } from "../types/generated/WallpaperKind";
 import type { WallpaperPreview } from "../types/generated/WallpaperPreview";
-import type { WallpaperSource } from "../types/generated/WallpaperSource";
 import {
   applyWallpaper,
   getCurrentWallpaper,
@@ -16,10 +13,16 @@ import {
   refreshWallpaperCatalog,
 } from "../tauri/api";
 import type { CurrentWallpaperState } from "../types/generated/CurrentWallpaperState";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 interface Props {
   backendStatus: BackendStatus;
 }
+
+const WALLPAPER_ENGINE_FILTER = {
+  kind: "wallpaperengineproject",
+  source: "wallpaperenginelibrary",
+} as const;
 
 function backendStatusLabel(s: WallpaperBackendStatus): string {
   switch (s.type) {
@@ -46,18 +49,13 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
   const [current, setCurrent] = useState<CurrentWallpaperState | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [filterKind, setFilterKind] = useState<WallpaperKind | "">("");
-  const [filterSource, setFilterSource] = useState<WallpaperSource | "">("");
+  const catalogBootstrapped = useRef(false);
 
   const loadList = useCallback(async () => {
     if (backendStatus !== "ready") return;
-    const f: WallpaperFilter = {
-      kind: filterKind === "" ? null : filterKind,
-      source: filterSource === "" ? null : filterSource,
-    };
-    const col = await listWallpapers({ filter: f, limit: null });
+    const col = await listWallpapers({ filter: WALLPAPER_ENGINE_FILTER, limit: null });
     setCollection(col);
-  }, [backendStatus, filterKind, filterSource]);
+  }, [backendStatus]);
 
   useEffect(() => {
     if (backendStatus !== "ready") return;
@@ -68,6 +66,32 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  /** Si el catálogo en caché está vacío, un primer escaneo a disco suele poblarlo (nuevas carpetas / XDG). */
+  useEffect(() => {
+    if (backendStatus !== "ready" || catalogBootstrapped.current || !collection) return;
+    if (collection.entries.length > 0) {
+      catalogBootstrapped.current = true;
+      return;
+    }
+    catalogBootstrapped.current = true;
+    void (async () => {
+      setBusy(true);
+      setMessage(null);
+      try {
+        const col = await refreshWallpaperCatalog();
+        setCollection(col);
+        setMessage({
+          kind: "ok",
+          text: `Catálogo inicial: ${col.scan_stats.entry_count} entradas.`,
+        });
+      } catch (e) {
+        setMessage({ kind: "err", text: String(e) });
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [backendStatus, collection]);
 
   useEffect(() => {
     if (!selectedId || backendStatus !== "ready") {
@@ -136,9 +160,9 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
     <div style={styles.page}>
       <h1 style={styles.heading}>Wallpapers</h1>
       <p style={styles.note}>
-        Catálogo desde carpetas allowlist (Pictures, Wallpapers, rutas típicas de Wallpaper Engine). Los
-        IDs son opacos; el apply usa el binario configurado (<code>LCC_WALLPAPER_APPLY_BIN</code> o{" "}
-        <code>lcc-wallpaper-helper</code>).
+        Catálogo limitado a proyectos de Wallpaper Engine. Los IDs son opacos; el apply usa el
+        binario configurado (<code>LCC_WALLPAPER_APPLY_BIN</code> o <code>lcc-wallpaper-helper</code>
+        ).
       </p>
 
       {backendStatus !== "ready" && (
@@ -168,40 +192,13 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
             </button>
           </section>
 
-          <section style={styles.filters}>
-            <label style={styles.filterLabel}>
-              Tipo{" "}
-              <select
-                style={styles.select}
-                value={filterKind}
-                onChange={(e) => setFilterKind((e.target.value || "") as WallpaperKind | "")}
-              >
-                <option value="">Todos</option>
-                <option value="image">Imagen</option>
-                <option value="video">Video</option>
-                <option value="wallpaperengineproject">Proyecto WE</option>
-                <option value="other">Otro</option>
-              </select>
-            </label>
-            <label style={styles.filterLabel}>
-              Origen{" "}
-              <select
-                style={styles.select}
-                value={filterSource}
-                onChange={(e) => setFilterSource((e.target.value || "") as WallpaperSource | "")}
-              >
-                <option value="">Todos</option>
-                <option value="localallowlistedroot">Local allowlist</option>
-                <option value="wallpaperenginelibrary">WE library</option>
-                <option value="unknown">Desconocido</option>
-              </select>
-            </label>
-          </section>
-
           <div style={styles.split}>
             <div style={styles.listPane}>
               {entries.length === 0 && (
-                <p style={styles.note}>Sin entradas. Pulsa «Actualizar catálogo» o revisa carpetas bajo HOME.</p>
+                <p style={styles.note}>
+                  Sin proyectos de Wallpaper Engine. Pulsa «Actualizar catálogo» o revisa la
+                  librería de Wallpaper Engine bajo tu HOME.
+                </p>
               )}
               <ul style={styles.list}>
                 {entries.map((e) => {
@@ -219,7 +216,7 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
                       >
                         <span style={styles.listTitle}>{e.metadata.title}</span>
                         <span style={styles.listMeta}>
-                          {e.kind} {e.flags.missing_file ? "· ausente" : ""}
+                          Proyecto Wallpaper Engine {e.flags.missing_file ? "· ausente" : ""}
                         </span>
                       </button>
                     </li>
@@ -256,7 +253,7 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "24px 28px", maxWidth: 1100 },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, marginBottom: 8, color: "#e2e8f0" },
   note: { fontSize: 13, color: "#94a3b8", lineHeight: 1.5, marginBottom: 12 },
   warn: { color: "#fbbf24", fontSize: 13 },
@@ -281,17 +278,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     alignSelf: "flex-end",
   },
-  filters: { display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" },
-  filterLabel: { fontSize: 13, color: "#9ca3af", display: "flex", alignItems: "center", gap: 8 },
-  select: {
-    padding: "6px 10px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#151722",
-    color: "#e2e8f0",
+  split: {
+    display: "flex",
+    gap: 20,
+    alignItems: "stretch",
+    flexWrap: "wrap",
+    width: "100%",
   },
-  split: { display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" },
-  listPane: { flex: 1, minWidth: 280, maxHeight: 480, overflow: "auto" },
+  listPane: {
+    flex: "1 1 320px",
+    minWidth: 260,
+    maxHeight: "calc(100vh - 260px)",
+    overflow: "auto",
+  },
   list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 },
   listItem: {
     width: "100%",
@@ -307,7 +306,8 @@ const styles: Record<string, React.CSSProperties> = {
   listTitle: { display: "block", fontSize: 14, fontWeight: 500 },
   listMeta: { display: "block", fontSize: 11, color: "#6b7280", marginTop: 2 },
   previewPane: {
-    width: 360,
+    flex: "1 1 340px",
+    minWidth: 280,
     minHeight: 280,
     padding: 16,
     background: "#151722",

@@ -11,6 +11,7 @@ import {
 } from "../tauri/api";
 import type { ThemePreviewDto } from "../tauri/types";
 import OpMessage, { type OpMsg } from "../components/OpMessage";
+import { PAGE_BASE } from "../layout/pageLayout";
 
 type PreviewTab = "hyprland" | "waybar_jsonc" | "waybar_css" | "rofi";
 
@@ -260,7 +261,7 @@ const ThemeManagerPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "24px 28px", maxWidth: 960 },
+  page: { ...PAGE_BASE },
   heading: { fontSize: 22, fontWeight: 600, marginBottom: 8, color: "#e2e8f0" },
   note: { fontSize: 13, color: "#94a3b8", lineHeight: 1.5, marginBottom: 16 },
   section: { marginBottom: 24 },
@@ -309,7 +310,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     lineHeight: 1.45,
     overflow: "auto",
-    maxHeight: 360,
+    maxHeight: "min(58vh, 560px)",
     color: "#a5b4fc",
     fontFamily: "ui-monospace, monospace",
   },
