@@ -99,7 +99,6 @@ export const MonitorLayoutPreviewInteractive: FC<Props> = ({
   const onMouseMove = useCallback(
     (e: MouseEvent) => {
       if (!drag || !layout || !svgRef.current) return;
-      const rect = svgRef.current.getBoundingClientRect();
       const sc = layout.sc;
       const dx = Math.round((e.clientX - drag.startClientX) / sc);
       const dy = Math.round((e.clientY - drag.startClientY) / sc);

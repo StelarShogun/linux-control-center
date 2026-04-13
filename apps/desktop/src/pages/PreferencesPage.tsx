@@ -1,7 +1,6 @@
 import { useState, type FC } from "react";
 import type { BackendStatus } from "../types/backend";
 import {
-  getAutoSavePreference,
   getHyprlandBannerDismissed,
   setAutoSavePreference,
   setHyprlandBannerDismissed,

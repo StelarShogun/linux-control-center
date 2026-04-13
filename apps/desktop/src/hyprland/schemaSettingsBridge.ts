@@ -2,7 +2,7 @@
  * Mapea claves del schema HyprMod (`general:gaps_in`, …) a campos de `HyprlandSettings`.
  */
 
-import type { HyprlandInputSettings, HyprlandSettings } from "../types/settings";
+import type { HyprlandSettings } from "../types/settings";
 
 export type MappedKind = "int" | "float" | "bool" | "color" | "string";
 

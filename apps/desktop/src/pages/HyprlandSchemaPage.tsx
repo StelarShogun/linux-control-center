@@ -12,7 +12,6 @@ import {
   loadHyprlandOptionsSchema,
   MIN_SCHEMA_QUERY_LENGTH,
   searchSchemaOptions,
-  type FlatSchemaOption,
   type HyprlandOptionsSchema,
 } from "../hyprland/schemaLoader";
 import {
@@ -82,16 +81,6 @@ const HyprlandSchemaPage: FC<Props> = ({
   }, [backendStatus]);
 
   useEffect(() => {
-    if (!focusSchemaKey || !flat.length) return;
-    setTab("catalog");
-    const id = `schema-row-${focusSchemaKey}`;
-    queueMicrotask(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
-      onConsumedFocusSchemaKey?.();
-    });
-  }, [focusSchemaKey, flat, onConsumedFocusSchemaKey]);
-
-  useEffect(() => {
     let cancelled = false;
     loadHyprlandOptionsSchema()
       .then((s) => {
@@ -106,6 +95,16 @@ const HyprlandSchemaPage: FC<Props> = ({
   }, []);
 
   const flat = useMemo(() => (schema ? flattenSchemaOptions(schema) : []), [schema]);
+
+  useEffect(() => {
+    if (!focusSchemaKey || !flat.length) return;
+    setTab("catalog");
+    const id = `schema-row-${focusSchemaKey}`;
+    queueMicrotask(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      onConsumedFocusSchemaKey?.();
+    });
+  }, [focusSchemaKey, flat, onConsumedFocusSchemaKey]);
 
   const explorerResults = useMemo(() => searchSchemaOptions(flat, q).slice(0, 80), [flat, q]);
 
