@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Linux Control Center
-Comment=Preview and apply config changes with backups
-Exec=linux-control-center
-Icon=linux-control-center
-Terminal=false
-Categories=Utility;Settings;
-

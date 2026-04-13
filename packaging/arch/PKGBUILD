@@ -1,5 +1,5 @@
 pkgname=linux-control-center
-pkgver=0.0.0.r7.g7a23b5d
+pkgver=0.0.0.r9.g4d42fce
 pkgrel=1
 pkgdesc="Desktop UI to preview/apply Hyprland/Waybar/Rofi config with safe backups"
 arch=("x86_64")
