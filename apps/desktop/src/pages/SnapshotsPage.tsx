@@ -3,7 +3,9 @@ import type { AppSettings } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
 import { createSnapshot, listSnapshots, restoreSnapshot } from "../tauri/api";
 import type { SnapshotInfo } from "../tauri/types";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { psCard } from "../theme/componentStyles";
 
 interface Props {
   settings: AppSettings;
@@ -47,8 +49,8 @@ const SnapshotsPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Snapshots</h1>
-      <p style={styles.note}>
+      <h1 style={PAGE_HEADING}>Snapshots</h1>
+      <p style={{ ...PAGE_NOTE, marginBottom: 24 }}>
         Snapshots persistidos localmente vía backend. Restaurar actualiza los settings de la app (no aplica cambios al sistema real).
       </p>
 
@@ -81,7 +83,8 @@ const SnapshotsPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
           <div style={styles.panelHeader}>
             <div style={styles.panelTitle}>Lista</div>
             <button
-              style={styles.secondaryBtn}
+              type="button"
+              className="ps-btn-secondary"
               disabled={backendStatus !== "ready" || busy}
               onClick={async () => {
                 setBusy(true);
@@ -150,7 +153,8 @@ const SnapshotsPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
 
           <div style={styles.actions}>
             <button
-              style={styles.primaryBtn}
+              type="button"
+              className="ps-btn-primary"
               disabled={backendStatus !== "ready" || busy}
               onClick={async () => {
                 setBusy(true);
@@ -172,7 +176,8 @@ const SnapshotsPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
             </button>
 
             <button
-              style={styles.dangerBtn}
+              type="button"
+              className="ps-btn-danger"
               disabled={backendStatus !== "ready" || busy || !selected}
               onClick={async () => {
                 if (!selected) return;
@@ -222,114 +227,93 @@ const SnapshotsPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
 
 const styles: Record<string, React.CSSProperties> = {
   page: { ...PAGE_BASE },
-  heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
-  note: { fontSize: 12, color: "#6b7280", marginBottom: 20, lineHeight: 1.5 },
   callout: {
-    background: "#1a1d2e",
-    border: "1px solid #374151",
-    borderRadius: 8,
+    ...psCard,
     padding: 16,
     fontSize: 13,
-    color: "#6b7280",
+    color: ps.textMuted,
     marginBottom: 12,
   },
   banner: {
-    borderRadius: 8,
-    padding: "10px 12px",
+    borderRadius: 12,
+    padding: "10px 14px",
     fontSize: 13,
     marginBottom: 16,
-    border: "1px solid #2e3250",
+    border: "1px solid",
   },
-  bannerInfo: { background: "#151722", color: "#9ca3af" },
-  bannerSuccess: { background: "#0b1f1a", color: "#a7f3d0", borderColor: "#1f3a3a" },
-  bannerError: { background: "#1f0b0b", color: "#fecaca", borderColor: "#3a1f1f" },
+  bannerInfo: { background: ps.infoBg, color: ps.infoText, borderColor: ps.infoBorder },
+  bannerSuccess: {
+    background: ps.successBg,
+    color: ps.successText,
+    borderColor: ps.successBorder,
+  },
+  bannerError: {
+    background: ps.dangerBg,
+    color: ps.dangerText,
+    borderColor: ps.dangerBorder,
+  },
   grid: {
     display: "grid",
     gridTemplateColumns: "minmax(280px, 1.1fr) minmax(280px, 1.4fr)",
-    gap: 16,
+    gap: 20,
     alignItems: "start",
     width: "100%",
   },
   panel: {
-    background: "#151722",
-    border: "1px solid #2e3250",
-    borderRadius: 10,
-    padding: 14,
+    ...psCard,
+    padding: 16,
   },
   panelHeader: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 12,
     gap: 8,
   },
-  panelTitle: { fontSize: 13, fontWeight: 700, color: "#e2e8f0" },
-  empty: { fontSize: 13, color: "#6b7280", padding: "10px 2px" },
-  list: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 6 },
+  panelTitle: { fontSize: 14, fontWeight: 600, color: ps.textPrimary },
+  empty: { fontSize: 13, color: ps.textMuted, padding: "10px 2px" },
+  list: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 },
   listItem: {
     width: "100%",
     textAlign: "left",
     background: "none",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    padding: 10,
+    border: `1px solid ${ps.borderDefault}`,
+    borderRadius: 12,
+    padding: 12,
     cursor: "pointer",
-    color: "#e2e8f0",
+    color: ps.textPrimary,
+    transition: "border-color 180ms ease, background 180ms ease",
   },
-  listItemActive: { borderColor: "#88c0d0", background: "#1a1d2e" },
+  listItemActive: {
+    borderColor: ps.blue,
+    background: "rgba(0, 112, 204, 0.12)",
+  },
   listMain: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 },
-  listLabel: { fontSize: 13, fontWeight: 600, color: "#e2e8f0" },
-  listTimestamp: { fontSize: 12, color: "#9ca3af", fontFamily: "monospace" },
-  listId: { marginTop: 6, fontSize: 11, color: "#6b7280", fontFamily: "monospace" },
+  listLabel: { fontSize: 13, fontWeight: 600, color: ps.textPrimary },
+  listTimestamp: { fontSize: 12, color: ps.textMuted, fontFamily: "monospace" },
+  listId: { marginTop: 6, fontSize: 11, color: ps.textMuted, fontFamily: "monospace" },
   formRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12 },
-  formLabel: { width: 70, fontSize: 12, color: "#9ca3af" },
+  formLabel: { width: 70, fontSize: 12, color: ps.textMuted },
   input: {
     flex: 1,
-    background: "#1e2030",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    color: "#e2e8f0",
+    background: ps.surfaceInput,
+    border: `1px solid ${ps.borderStrong}`,
+    borderRadius: 3,
+    color: ps.textPrimary,
     padding: "8px 10px",
     fontSize: 13,
   },
-  actions: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 },
-  primaryBtn: {
-    background: "#2e3250",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    padding: "10px 14px",
-    color: "#e2e8f0",
-    cursor: "pointer",
-    fontSize: 13,
-  },
-  secondaryBtn: {
-    background: "none",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    padding: "8px 12px",
-    color: "#9ca3af",
-    cursor: "pointer",
-    fontSize: 13,
-  },
-  dangerBtn: {
-    background: "#1f0b0b",
-    border: "1px solid #3a1f1f",
-    borderRadius: 8,
-    padding: "10px 14px",
-    color: "#fecaca",
-    cursor: "pointer",
-    fontSize: 13,
-  },
+  actions: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14, alignItems: "center" },
   detailBox: {
-    borderTop: "1px solid #2e3250",
-    marginTop: 10,
-    paddingTop: 12,
+    borderTop: `1px solid ${ps.borderDefault}`,
+    marginTop: 12,
+    paddingTop: 14,
   },
-  detailTitle: { fontSize: 12, color: "#9ca3af", marginBottom: 10, fontWeight: 600 },
+  detailTitle: { fontSize: 12, color: ps.textMuted, marginBottom: 10, fontWeight: 600 },
   detailRow: { display: "flex", gap: 10, marginBottom: 8 },
-  detailKey: { width: 80, fontSize: 12, color: "#6b7280" },
-  detailVal: { fontSize: 12, color: "#e2e8f0" },
-  detailValMono: { fontSize: 12, color: "#e2e8f0", fontFamily: "monospace" },
+  detailKey: { width: 80, fontSize: 12, color: ps.textMuted },
+  detailVal: { fontSize: 12, color: ps.textPrimary },
+  detailValMono: { fontSize: 12, color: ps.textPrimary, fontFamily: "monospace" },
 };
 
 export default SnapshotsPage;

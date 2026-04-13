@@ -79,7 +79,43 @@ fn validate_hyprland(settings: &AppSettings) -> Result<(), CoreError> {
             "hyprland.input.mouse_sensitivity must be between -1.0 and 1.0".into(),
         ));
     }
+    let mut seen_bezier: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for (i, c) in h.bezier_curves.iter().enumerate() {
+        let n = c.name.trim();
+        if n.is_empty() {
+            return Err(CoreError::Validation(format!(
+                "hyprland.bezier_curves[{i}].name cannot be empty"
+            )));
+        }
+        if n.contains('\n') || n.contains('\r') {
+            return Err(CoreError::Validation(
+                "hyprland bezier curve name must not contain newlines".into(),
+            ));
+        }
+        if !seen_bezier.insert(n) {
+            return Err(CoreError::Validation(format!(
+                "duplicate hyprland bezier curve name: {n}"
+            )));
+        }
+        for (label, v) in [("x1", c.x1), ("y1", c.y1), ("x2", c.x2), ("y2", c.y2)] {
+            if !(-10.0..=10.0).contains(&v) {
+                return Err(CoreError::Validation(format!(
+                    "hyprland.bezier_curves[{i}].{label} out of supported range"
+                )));
+            }
+        }
+    }
+    const ALLOWED_BIND_TYPES: &[&str] = &[
+        "bind", "bindl", "binde", "bindm", "bindle", "bindlr", "bindlte", "bindp", "bindpt",
+        "bindd", "binddr",
+    ];
     for (i, b) in h.keyboard.binds.iter().enumerate() {
+        let bt = b.bind_type.trim();
+        if !bt.is_empty() && !ALLOWED_BIND_TYPES.contains(&bt) {
+            return Err(CoreError::Validation(format!(
+                "hyprland.keyboard.binds[{i}].bind_type is not a known Hyprland bind keyword"
+            )));
+        }
         if b.enabled {
             if b.key.trim().is_empty() {
                 return Err(CoreError::Validation(format!(

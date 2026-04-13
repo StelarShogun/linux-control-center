@@ -1,13 +1,79 @@
-*, *::before, *::after {
+/* PlayStation-inspired dark theme — see DESIGN.md */
+
+:root {
+  /* Surfaces — canal oscuro (Shadow Black → Console Black) */
+  --ps-surface-root: #0a0a0b;
+  --ps-surface-chrome: #000000;
+  --ps-surface-panel: #121314;
+  --ps-surface-raised: #1a1b1e;
+  --ps-surface-input: #161618;
+  --ps-surface-code: #141416;
+  --ps-surface-overlay: #1c1d22;
+
+  --ps-border-subtle: rgba(255, 255, 255, 0.06);
+  --ps-border-default: rgba(255, 255, 255, 0.1);
+  --ps-border-strong: rgba(255, 255, 255, 0.16);
+  --ps-border-accent: #0070cc;
+
+  --ps-text-primary: #ffffff;
+  --ps-text-secondary: #c4c4c4;
+  --ps-text-muted: #8e8e8e;
+  --ps-text-disabled: #5c5c5c;
+  --ps-text-mono: #7ec8ea;
+  --ps-text-accent: #53b1ff;
+
+  --ps-blue: #0070cc;
+  --ps-cyan: #1eaedb;
+  --ps-link-dark: #53b1ff;
+  --ps-link-hover: #1883fd;
+
+  --ps-danger: #c81b3a;
+  --ps-danger-bg: rgba(200, 27, 58, 0.14);
+  --ps-danger-border: rgba(200, 27, 58, 0.45);
+  --ps-danger-text: #ffb4c0;
+
+  --ps-success-bg: rgba(0, 112, 204, 0.12);
+  --ps-success-border: rgba(30, 174, 219, 0.38);
+  --ps-success-text: #b8e8f5;
+
+  --ps-warning-bg: rgba(213, 59, 0, 0.12);
+  --ps-warning-border: rgba(213, 59, 0, 0.42);
+  --ps-warning-text: #ffb38a;
+
+  --ps-info-bg: rgba(0, 112, 204, 0.1);
+  --ps-info-border: rgba(0, 112, 204, 0.32);
+  --ps-info-text: #9ecfff;
+
+  --ps-commerce: #d53b00;
+  --ps-commerce-active: #aa2f00;
+
+  --ps-shadow-dropdown: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --ps-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
+
+  --ps-radius-input: 3px;
+  --ps-radius-card: 12px;
+  --ps-radius-pill: 999px;
+
+  --ps-transition-ui: 180ms ease;
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background: #16181f;
-  color: #e2e8f0;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #121314 0%, #000000 100%);
+  background-attachment: fixed;
+  color: var(--ps-text-primary);
+  font-family: Arial, Helvetica, system-ui, sans-serif;
   font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -17,7 +83,9 @@ body {
   display: flex;
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   margin: 0;
 }
 
@@ -30,26 +98,157 @@ button {
   font-size: inherit;
 }
 
-input, select, option {
+input,
+select,
+option {
   font-family: inherit;
   font-size: inherit;
 }
 
 select {
-  background-color: #1e2030;
-  color: #e2e8f0;
-  border: 1px solid #3d4466;
-  border-radius: 6px;
+  background-color: var(--ps-surface-input);
+  color: var(--ps-text-primary);
+  border: 1px solid var(--ps-border-strong);
+  border-radius: var(--ps-radius-input);
   padding: 6px 10px;
   min-height: 34px;
 }
 
 select:focus-visible {
-  outline: 2px solid #88c0d0;
-  outline-offset: 1px;
+  outline: 2px solid var(--ps-cyan);
+  outline-offset: 2px;
 }
 
 option {
-  background-color: #1e2030;
-  color: #e2e8f0;
+  background-color: var(--ps-surface-panel);
+  color: var(--ps-text-primary);
+}
+
+a {
+  color: var(--ps-link-dark);
+  text-decoration: none;
+  transition: color var(--ps-transition-ui);
+}
+
+a:hover {
+  color: var(--ps-link-hover);
+}
+
+/* Primario — pastilla PlayStation Blue + hover firma (cyan, borde blanco, anillo azul, escala) */
+.ps-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ps-blue);
+  color: #ffffff;
+  border: 2px solid transparent;
+  border-radius: var(--ps-radius-pill);
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition:
+    transform var(--ps-transition-ui),
+    background var(--ps-transition-ui),
+    border-color var(--ps-transition-ui),
+    box-shadow var(--ps-transition-ui);
+}
+
+.ps-btn-primary:hover:not(:disabled) {
+  background: var(--ps-cyan);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px var(--ps-blue);
+  transform: scale(1.2);
+}
+
+.ps-btn-primary:focus-visible {
+  background: var(--ps-cyan);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px var(--ps-blue);
+  outline: none;
+}
+
+.ps-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Secundario — borde sutil, acento en hover sin escala agresiva (UI densa) */
+.ps-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ps-surface-raised);
+  color: var(--ps-text-secondary);
+  border: 1px solid var(--ps-border-strong);
+  border-radius: var(--ps-radius-pill);
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    color var(--ps-transition-ui),
+    background var(--ps-transition-ui),
+    border-color var(--ps-transition-ui),
+    box-shadow var(--ps-transition-ui);
+}
+
+.ps-btn-secondary:hover:not(:disabled) {
+  color: var(--ps-text-primary);
+  border-color: var(--ps-blue);
+  background: var(--ps-surface-panel);
+  box-shadow: 0 0 0 1px rgba(0, 112, 204, 0.35);
+}
+
+.ps-btn-secondary:focus-visible {
+  outline: 2px solid var(--ps-cyan);
+  outline-offset: 2px;
+}
+
+.ps-btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Destructivo / rollback — rojo advertencia DESIGN */
+.ps-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ps-danger-bg);
+  color: var(--ps-danger-text);
+  border: 1px solid var(--ps-danger-border);
+  border-radius: var(--ps-radius-card);
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--ps-transition-ui),
+    border-color var(--ps-transition-ui),
+    transform var(--ps-transition-ui);
+}
+
+.ps-btn-danger:hover:not(:disabled) {
+  background: rgba(200, 27, 58, 0.22);
+  border-color: var(--ps-danger);
+  transform: scale(1.05);
+}
+
+.ps-btn-danger:focus-visible {
+  outline: 2px solid var(--ps-cyan);
+  outline-offset: 2px;
+}
+
+.ps-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ps-search-row:hover {
+  background: rgba(0, 112, 204, 0.12);
+  color: var(--ps-text-primary);
 }

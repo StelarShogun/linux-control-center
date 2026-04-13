@@ -3,12 +3,12 @@
 pkgname = linux-control-center-debug
 pkgbase = linux-control-center
 xdata = pkgtype=debug
-pkgver = 0.0.0.r6.g8e4563d-1
+pkgver = 0.0.0.r7.g7a23b5d-1
 pkgdesc = Detached debugging symbols for linux-control-center
 url = https://github.com/StelarShogun/linux-control-center
-builddate = 1775894335
+builddate = 1775956438
 packager = Unknown Packager
-size = 3316024
+size = 3340128
 arch = x86_64
 license = MIT
 makedepend = git

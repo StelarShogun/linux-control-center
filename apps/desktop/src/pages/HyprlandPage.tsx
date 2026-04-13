@@ -1,10 +1,11 @@
-import { useEffect, useState, type FC } from "react";
+import { useEffect, useRef, useState, type FC } from "react";
 import type { AppSettings, HyprlandInputSettings, HyprlandSettings } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
 import {
   applyConfigToRealPath,
   applyConfigToSandbox,
   applyLiveHyprland,
+  hyprctlReload,
   inspectHyprlandSetup,
   repairHyprlandMainInclude,
   previewHyprlandConfig,
@@ -15,7 +16,9 @@ import {
 import type { ApplyLiveResult, ApplyToRealPathResult } from "../tauri/types";
 import OpMessage, { type OpMsg } from "../components/OpMessage";
 import WriteResultPanel from "../components/WriteResultPanel";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { psCard } from "../theme/componentStyles";
 
 interface Props {
   settings: AppSettings;
@@ -31,9 +34,42 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
   const [sandboxResult, setSandboxResult] = useState<{ path: string; snapshotId: string } | null>(null);
   const [realResult, setRealResult] = useState<ApplyToRealPathResult | null>(null);
   const [liveResult, setLiveResult] = useState<ApplyLiveResult | null>(null);
+  const [reloadOnlyBusy, setReloadOnlyBusy] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<HyprlandMigrationStatus | null>(null);
   const [repairingInclude, setRepairingInclude] = useState(false);
   const [inputSectionOpen, setInputSectionOpen] = useState(false);
+  const undoHyprland = useRef<string[]>([]);
+  const [savedHyprlandJson, setSavedHyprlandJson] = useState(() =>
+    JSON.stringify(settings.hyprland)
+  );
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  const pushUndoHyprland = () => {
+    const cur = settingsRef.current.hyprland;
+    undoHyprland.current = [...undoHyprland.current.slice(-29), JSON.stringify(cur)];
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
+      const t = e.target as HTMLElement;
+      if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+      e.preventDefault();
+      const prev = undoHyprland.current.pop();
+      if (!prev) return;
+      try {
+        const hyprland = JSON.parse(prev) as HyprlandSettings;
+        onSettingsChange({ ...settingsRef.current, hyprland });
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onSettingsChange]);
+
+  const dirtyHyprland = JSON.stringify(settings.hyprland) !== savedHyprlandJson;
 
   const startOp = (label: string) => {
     setBusy(true);
@@ -63,16 +99,19 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
   const update = <K extends keyof HyprlandSettings>(
     key: K,
     value: HyprlandSettings[K]
-  ) =>
+  ) => {
+    pushUndoHyprland();
     onSettingsChange({
       ...settings,
       hyprland: { ...settings.hyprland, [key]: value },
     });
+  };
 
   const updateInput = <K extends keyof HyprlandInputSettings>(
     key: K,
     value: HyprlandInputSettings[K]
-  ) =>
+  ) => {
+    pushUndoHyprland();
     onSettingsChange({
       ...settings,
       hyprland: {
@@ -80,11 +119,12 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
         input: { ...settings.hyprland.input, [key]: value },
       },
     });
+  };
 
   return (
-    <div style={styles.page}>
-      <h1 style={styles.heading}>Hyprland</h1>
-      <p style={styles.note}>
+    <div style={styles.page} data-no-global-undo>
+      <h1 style={PAGE_HEADING}>Hyprland</h1>
+      <p style={{ ...PAGE_NOTE, marginBottom: 24 }}>
         Controla gaps, bordes, blur, rounding y animaciones.
         Los cambios se aplican a <code>~/.config/hypr/generated/linux-control-center.conf</code> sin tocar el resto de tu configuración.
       </p>
@@ -94,6 +134,21 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
       {backendStatus === "unavailable" && (
         <div style={{ ...styles.statusBanner, ...styles.statusBannerError }}>
           Backend no disponible. Ejecuta la app con Tauri para usar todas las funciones.
+        </div>
+      )}
+
+      {dirtyHyprland && (
+        <div
+          style={{
+            ...styles.statusBanner,
+            borderColor: ps.warningBorder,
+            background: ps.warningBg,
+            color: ps.warningText,
+            marginBottom: 16,
+          }}
+        >
+          Cambios sin guardar en la app (Hyprland). Pulsa <strong>Save</strong> o usa{" "}
+          <kbd>Ctrl+Z</kbd> para deshacer en esta página.
         </div>
       )}
 
@@ -284,6 +339,7 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
             try {
               const saved = await saveSettings({ settings });
               onSettingsChange(saved);
+              setSavedHyprlandJson(JSON.stringify(saved.hyprland));
               setMessage({ kind: "success", text: "Settings guardados." });
             } catch (e) {
               setMessage({ kind: "error", text: `Error al guardar: ${String(e)}` });
@@ -364,6 +420,31 @@ const HyprlandPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) 
           }}
         >
           {activeOp === "Apply live" ? "Aplicando…" : "Apply live ⚡"}
+        </button>
+
+        <button
+          type="button"
+          style={styles.saveBtnNeutral}
+          disabled={backendStatus !== "ready" || busy || reloadOnlyBusy}
+          title="Ejecuta solo hyprctl reload. No escribe archivos; útil si ya editaste la config a mano."
+          onClick={async () => {
+            setReloadOnlyBusy(true);
+            try {
+              const r = await hyprctlReload();
+              setMessage({
+                kind: r.ok ? "success" : "warning",
+                text: r.ok
+                  ? "hyprctl reload completado."
+                  : `hyprctl reload falló: ${r.output || "(sin salida)"}`,
+              });
+            } catch (e) {
+              setMessage({ kind: "error", text: String(e) });
+            } finally {
+              setReloadOnlyBusy(false);
+            }
+          }}
+        >
+          {reloadOnlyBusy ? "Reload…" : "hyprctl reload"}
         </button>
       </div>
 
@@ -477,7 +558,7 @@ const MigrationBanner: FC<MigrationBannerProps> = ({ status, onRepair, repairing
         </span>
         {available_backups.length > 0 && (
           <div style={styles.migrationBackupList}>
-            <span style={{ fontSize: 11, color: "#9ca3af" }}>Backups disponibles:</span>
+            <span style={{ fontSize: 11, color: ps.textMuted }}>Backups disponibles:</span>
             {available_backups.slice(0, 5).map((bak) => (
               <code key={bak} style={styles.migrationBackupItem}>{bak}</code>
             ))}
@@ -509,7 +590,7 @@ const MigrationBanner: FC<MigrationBannerProps> = ({ status, onRepair, repairing
       <strong style={styles.migrationBannerTitle}>{title}</strong>
       {body}
       {warnings.map((w, i) => (
-        <div key={i} style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>{w}</div>
+        <div key={i} style={{ fontSize: 11, color: ps.textMuted, marginTop: 4 }}>{w}</div>
       ))}
     </div>
   );
@@ -581,43 +662,39 @@ const BoolField: FC<{
 );
 
 const BTN_BASE: React.CSSProperties = {
-  borderRadius: 8,
-  padding: "9px 14px",
+  borderRadius: 999,
+  padding: "9px 18px",
   cursor: "pointer",
   fontSize: 13,
   border: "1px solid",
   fontWeight: 500,
   flexShrink: 0,
+  fontFamily: "inherit",
 };
 
 const styles: Record<string, React.CSSProperties> = {
   page: { ...PAGE_BASE },
-  heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
-  note: { fontSize: 12, color: "#6b7280", marginBottom: 24, lineHeight: 1.6 },
   statusBanner: {
     fontSize: 12,
-    color: "#9ca3af",
-    background: "#151722",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    padding: "8px 12px",
+    color: ps.textMuted,
+    ...psCard,
+    padding: "10px 14px",
     marginBottom: 24,
   },
   statusBannerError: {
-    color: "#fca5a5",
-    background: "#1f0b0b",
-    borderColor: "#3a1f1f",
+    color: ps.dangerText,
+    background: ps.dangerBg,
+    borderColor: ps.dangerBorder,
   },
-  section: { marginBottom: 32 },
+  section: { marginBottom: 36 },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#88c0d0",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 12,
-    paddingBottom: 6,
-    borderBottom: "1px solid #2e3250",
+    fontSize: 15,
+    fontWeight: 300,
+    color: ps.textAccent,
+    letterSpacing: "0.02em",
+    marginBottom: 14,
+    paddingBottom: 8,
+    borderBottom: `1px solid ${ps.borderDefault}`,
   },
   collapser: {
     display: "flex",
@@ -631,52 +708,50 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
     fontFamily: "inherit",
   },
-  chev: { fontSize: 12, color: "#6b7280", marginLeft: 8 },
-  inputBlock: { paddingTop: 8, borderTop: "1px solid #2e3250" },
+  chev: { fontSize: 12, color: ps.textMuted, marginLeft: 8 },
+  inputBlock: { paddingTop: 8, borderTop: `1px solid ${ps.borderDefault}` },
   textIn: {
     flex: 1,
     padding: "6px 10px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#151722",
-    color: "#e2e8f0",
+    borderRadius: 3,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfaceInput,
+    color: ps.textPrimary,
     fontSize: 13,
     fontFamily: "inherit",
     maxWidth: 320,
   },
   field: { display: "flex", alignItems: "center", gap: 16, marginBottom: 12 },
-  label: { width: 140, fontSize: 13, color: "#9ca3af", flexShrink: 0 },
+  label: { width: 140, fontSize: 13, color: ps.textMuted, flexShrink: 0 },
   control: { display: "flex", alignItems: "center", gap: 8 },
-  range: { width: 160, accentColor: "#88c0d0" },
-  rangeValue: { fontSize: 13, color: "#e2e8f0", width: 48, fontFamily: "monospace" },
+  range: { width: 160, accentColor: ps.blue },
+  rangeValue: { fontSize: 13, color: ps.textPrimary, width: 48, fontFamily: "monospace" },
   colorInput: { width: 36, height: 28, border: "none", cursor: "pointer" },
-  colorValue: { fontSize: 13, color: "#9ca3af", fontFamily: "monospace" },
-  boolLabel: { fontSize: 13, color: "#9ca3af" },
+  colorValue: { fontSize: 13, color: ps.textMuted, fontFamily: "monospace" },
+  boolLabel: { fontSize: 13, color: ps.textMuted },
   actionRow: { display: "flex", flexWrap: "wrap" as const, gap: 8, marginTop: 8 },
-  saveBtn: { ...BTN_BASE, background: "#2e3250", borderColor: "#2e3250", color: "#e2e8f0" },
-  saveBtnNeutral: { ...BTN_BASE, background: "#1e2030", borderColor: "#2e3250", color: "#9ca3af" },
-  saveBtnAmber: { ...BTN_BASE, background: "#1a1500", borderColor: "#4a3f20", color: "#fbbf24" },
-  saveBtnGreen: { ...BTN_BASE, background: "#0b1f1a", borderColor: "#1a3a2a", color: "#6ee7b7" },
+  saveBtn: { ...BTN_BASE, background: ps.blue, borderColor: ps.blue, color: "#ffffff" },
+  saveBtnNeutral: { ...BTN_BASE, background: ps.surfaceRaised, borderColor: ps.borderStrong, color: ps.textSecondary },
+  saveBtnAmber: { ...BTN_BASE, background: ps.warningBg, borderColor: ps.warningBorder, color: ps.warningText },
+  saveBtnGreen: { ...BTN_BASE, background: ps.successBg, borderColor: ps.successBorder, color: ps.successText },
   migrationBanner: {
     display: "flex",
     flexDirection: "column" as const,
     gap: 8,
     fontSize: 12,
-    background: "#151722",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    padding: "10px 14px",
+    ...psCard,
+    padding: "12px 16px",
     marginBottom: 20,
   },
   migrationBannerAmber: {
-    background: "#1a1500",
-    borderColor: "#4a3f20",
-    color: "#fbbf24",
+    background: ps.warningBg,
+    borderColor: ps.warningBorder,
+    color: ps.warningText,
   },
   migrationBannerRed: {
-    background: "#1f0b0b",
-    borderColor: "#3a1f1f",
-    color: "#fca5a5",
+    background: ps.dangerBg,
+    borderColor: ps.dangerBorder,
+    color: ps.dangerText,
   },
   migrationBannerTitle: {
     fontSize: 12,
@@ -685,16 +760,16 @@ const styles: Record<string, React.CSSProperties> = {
   migrationBannerText: {
     fontSize: 12,
     lineHeight: 1.5,
-    color: "#d1d5db",
+    color: ps.textSecondary,
   },
   migrationBannerBtn: {
     alignSelf: "flex-start" as const,
-    background: "#2a1e00",
-    border: "1px solid #4a3f20",
-    borderRadius: 6,
-    color: "#fbbf24",
+    background: ps.warningBg,
+    border: `1px solid ${ps.warningBorder}`,
+    borderRadius: 999,
+    color: ps.warningText,
     fontSize: 12,
-    padding: "5px 10px",
+    padding: "6px 12px",
     cursor: "pointer",
   },
   migrationBackupList: {
@@ -705,27 +780,25 @@ const styles: Record<string, React.CSSProperties> = {
   },
   migrationBackupItem: {
     fontSize: 11,
-    color: "#9ca3af",
-    background: "#1e1e2e",
-    borderRadius: 4,
+    color: ps.textMuted,
+    background: ps.surfaceCode,
+    borderRadius: 3,
     padding: "1px 4px",
     fontFamily: "monospace",
   },
-  previewContainer: { marginTop: 24 },
+  previewContainer: { marginTop: 28 },
   previewLabel: {
-    fontSize: 11,
-    color: "#6b7280",
-    marginBottom: 6,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.06em",
+    fontSize: 12,
+    fontWeight: 600,
+    color: ps.textMuted,
+    marginBottom: 8,
+    letterSpacing: "0.02em",
   },
   preview: {
-    background: "#151722",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
+    ...psCard,
     padding: 16,
     fontSize: 12,
-    color: "#88c0d0",
+    color: ps.textMono,
     overflow: "auto",
     fontFamily: "monospace",
     maxHeight: "min(55vh, 560px)",

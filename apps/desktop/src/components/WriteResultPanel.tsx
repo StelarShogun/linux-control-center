@@ -2,6 +2,7 @@ import { useState, type FC } from "react";
 import type { WriteTarget } from "../types/generated/WriteTarget";
 import { rollbackFullState } from "../tauri/api";
 import type { OpMsg } from "./OpMessage";
+import { ps } from "../theme/playstationDark";
 
 interface WriteResultPanelProps {
   label: string;
@@ -86,7 +87,7 @@ const WriteResultPanel: FC<WriteResultPanelProps> = ({
             icon="R"
             label="reload"
             value={reloadOk ? "Hyprland recargado correctamente" : "Reload falló — config activa al reiniciar"}
-            valueColor={reloadOk ? "#a7f3d0" : "#fde68a"}
+            valueColor={reloadOk ? ps.successText : ps.warningText}
           />
         )}
         {reloadOutput && !reloadOk && (
@@ -96,7 +97,9 @@ const WriteResultPanel: FC<WriteResultPanelProps> = ({
 
       {canRollback && (
         <button
-          style={styles.rollbackBtn}
+          type="button"
+          className="ps-btn-danger"
+          style={{ marginTop: 12 }}
           disabled={rolling}
           onClick={handleRollback}
         >
@@ -130,60 +133,50 @@ const Row: FC<{
 );
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { marginTop: 20, width: "100%", maxWidth: "100%" },
+  container: { marginTop: 24, width: "100%", maxWidth: "100%" },
   label: {
-    fontSize: 11,
-    color: "#6b7280",
-    marginBottom: 6,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.06em",
+    fontSize: 12,
+    fontWeight: 600,
+    color: ps.textMuted,
+    marginBottom: 8,
+    letterSpacing: "0.02em",
   },
   card: {
-    background: "#151722",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    padding: "12px 16px",
+    background: ps.surfacePanel,
+    border: `1px solid ${ps.borderDefault}`,
+    borderRadius: 12,
+    padding: "14px 18px",
+    boxShadow: ps.shadowCard,
     display: "flex",
     flexDirection: "column" as const,
-    gap: 6,
+    gap: 8,
   },
   row: {
     display: "flex",
     alignItems: "flex-start",
     gap: 8,
-    fontSize: 12,
+    fontSize: 13,
   },
   rowIcon: {
-    color: "#4b5563",
+    color: ps.textDisabled,
     width: 14,
     flexShrink: 0,
     fontFamily: "monospace",
   },
   rowLabel: {
-    color: "#6b7280",
-    width: 70,
+    color: ps.textMuted,
+    width: 72,
     flexShrink: 0,
   },
   rowValue: {
-    color: "#9ca3af",
+    color: ps.textSecondary,
     wordBreak: "break-all" as const,
     flex: 1,
   },
   rowMono: {
     fontFamily: "monospace",
     fontSize: 11,
-    color: "#88c0d0",
-  },
-  rollbackBtn: {
-    marginTop: 10,
-    background: "#1f0b0b",
-    border: "1px solid #3a1f1f",
-    borderRadius: 8,
-    padding: "8px 14px",
-    color: "#fca5a5",
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 500,
+    color: ps.textMono,
   },
 };
 

@@ -129,6 +129,58 @@ export async function saveProfile(args: SaveProfileArgs): Promise<string> {
   return await invoke<string>("save_profile", { args });
 }
 
+export interface ProfileListItemDto {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+}
+
+export async function listProfiles(): Promise<ProfileListItemDto[]> {
+  return await invoke<ProfileListItemDto[]>("list_profiles_cmd");
+}
+
+export async function deleteProfile(id: string): Promise<void> {
+  await invoke<void>("delete_profile_cmd", { id });
+}
+
+export async function loadProfileSettings(id: string): Promise<AppSettings> {
+  return await invoke<AppSettings>("load_profile_settings", { id });
+}
+
+export interface UpdateProfileArgs {
+  id: string;
+  name: string;
+  description: string | null;
+  settings: AppSettings;
+}
+
+export async function updateProfile(args: UpdateProfileArgs): Promise<void> {
+  await invoke<void>("update_profile_cmd", { args });
+}
+
+export interface ActiveProfileDto {
+  profile_id: string | null;
+  profile_name: string | null;
+}
+
+export async function getActiveProfile(): Promise<ActiveProfileDto> {
+  return await invoke<ActiveProfileDto>("get_active_profile");
+}
+
+export async function setActiveProfile(
+  profileId: string | null,
+  profileName: string | null
+): Promise<void> {
+  await invoke<void>("set_active_profile", {
+    args: { profile_id: profileId, profile_name: profileName },
+  });
+}
+
+export async function hyprctlDevicesJson(): Promise<string> {
+  return await invoke<string>("hyprctl_devices_json");
+}
+
 export async function saveSettings(args: SaveSettingsArgs): Promise<AppSettings> {
   return await invoke<AppSettings>("save_settings", { args });
 }
@@ -144,6 +196,40 @@ export async function restoreSnapshot(args: RestoreSnapshotArgs): Promise<AppSet
 /** Returns the Hyprland config text that would be generated from current settings. Read-only. */
 export async function previewHyprlandConfig(): Promise<string> {
   return await invoke<string>("preview_hyprland_config");
+}
+
+/** `hyprctl getoption` — solo lectura; requiere Hyprland en ejecución. */
+export async function hyprctlGetOption(name: string): Promise<string> {
+  return await invoke<string>("hyprctl_get_option", { name });
+}
+
+/** `hyprctl keyword` — cambio en vivo en el compositor (no modifica archivos de config). */
+export async function hyprctlSetKeyword(name: string, value: string): Promise<string> {
+  return await invoke<string>("hyprctl_set_keyword", { name, value });
+}
+
+/** Lista de atajos del compositor (`hyprctl binds -j`). */
+export async function hyprctlBindsJson(): Promise<string> {
+  return await invoke<string>("hyprctl_binds_json");
+}
+
+export async function hyprctlMonitorsJson(): Promise<string> {
+  return await invoke<string>("hyprctl_monitors_json");
+}
+
+/** Metadatos del compositor (`hyprctl -j version`). */
+export async function hyprctlVersionJson(): Promise<string> {
+  return await invoke<string>("hyprctl_version_json");
+}
+
+export interface HyprctlReloadResult {
+  ok: boolean;
+  output: string;
+}
+
+/** Solo `hyprctl reload`; no modifica archivos en disco. */
+export async function hyprctlReload(): Promise<HyprctlReloadResult> {
+  return await invoke<HyprctlReloadResult>("hyprctl_reload");
 }
 
 /** Returns the Waybar config JSON that would be generated from current settings. Read-only. */

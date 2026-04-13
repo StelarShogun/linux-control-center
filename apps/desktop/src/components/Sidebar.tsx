@@ -1,9 +1,17 @@
 import { useCallback, useState, type FC } from "react";
 import type { BackendStatus } from "../types/backend";
+import type { AppSettings } from "../types/settings";
+import { ps } from "../theme/playstationDark";
+import DnaStrip from "./DnaStrip";
 
 export type Page =
+  | "search"
+  | "preferences"
   | "appearance"
   | "hyprland"
+  | "hyprland_schema"
+  | "animations"
+  | "monitors"
   | "keybindings"
   | "window-rules"
   | "waybar"
@@ -46,6 +54,9 @@ const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     items: [
       { id: "hyprland", label: "Hyprland" },
+      { id: "hyprland_schema", label: "Opciones (schema)" },
+      { id: "animations", label: "Animaciones" },
+      { id: "monitors", label: "Monitores" },
       { id: "keybindings", label: "Atajos" },
       { id: "window-rules", label: "Reglas de ventana" },
     ],
@@ -74,6 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Gestión",
     defaultOpen: true,
     items: [
+      { id: "preferences", label: "Preferencias" },
       { id: "snapshots", label: "Snapshots" },
       { id: "profiles", label: "Perfiles" },
       { id: "recent_operations", label: "Últimas operaciones" },
@@ -85,9 +97,11 @@ interface SidebarProps {
   current: Page;
   onNavigate: (page: Page) => void;
   backendStatus: BackendStatus;
+  dirtyCounts?: Partial<Record<Page, number>>;
+  settings?: AppSettings;
 }
 
-const Sidebar: FC<SidebarProps> = ({ current, onNavigate, backendStatus }) => {
+const Sidebar: FC<SidebarProps> = ({ current, onNavigate, backendStatus, dirtyCounts, settings }) => {
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
     for (const g of NAV_GROUPS) {
@@ -102,7 +116,7 @@ const Sidebar: FC<SidebarProps> = ({ current, onNavigate, backendStatus }) => {
 
   return (
     <nav style={styles.nav}>
-      <div style={styles.title}>Control Center</div>
+      <div style={styles.title}>Control center</div>
       <ul style={styles.list}>
         {NAV_GROUPS.map((group) => {
           const isOpen = open[group.id] ?? true;
@@ -131,7 +145,12 @@ const Sidebar: FC<SidebarProps> = ({ current, onNavigate, backendStatus }) => {
                           onClick={() => onNavigate(item.id)}
                           aria-current={isActive ? "page" : undefined}
                         >
-                          <span>{item.label}</span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                            <span style={{ flex: 1, textAlign: "left" }}>{item.label}</span>
+                            {dirtyCounts && dirtyCounts[item.id] ? (
+                              <span style={styles.badge}>{dirtyCounts[item.id]}</span>
+                            ) : null}
+                          </span>
                         </button>
                       </li>
                     );
@@ -143,6 +162,11 @@ const Sidebar: FC<SidebarProps> = ({ current, onNavigate, backendStatus }) => {
         })}
       </ul>
       <div style={styles.footer}>
+        {settings && (
+          <div style={{ padding: "0 12px 12px", display: "flex", justifyContent: "center" }}>
+            <DnaStrip settings={settings} />
+          </div>
+        )}
         <div style={styles.footerLabel}>Backend</div>
         <div
           style={{
@@ -167,25 +191,24 @@ const Sidebar: FC<SidebarProps> = ({ current, onNavigate, backendStatus }) => {
 
 const styles: Record<string, React.CSSProperties> = {
   nav: {
-    width: 216,
+    width: 220,
     minHeight: "100vh",
-    background: "#1e2030",
-    borderRight: "1px solid #2e3250",
+    background: ps.surfaceChrome,
+    borderRight: `1px solid ${ps.borderDefault}`,
     display: "flex",
     flexDirection: "column",
-    padding: "16px 0",
+    padding: "20px 0",
     boxSizing: "border-box",
     flexShrink: 0,
   },
   title: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#88c0d0",
-    padding: "0 16px 16px",
-    textTransform: "uppercase",
-    letterSpacing: "0.1em",
-    borderBottom: "1px solid #2e3250",
-    marginBottom: 8,
+    fontSize: 15,
+    fontWeight: 300,
+    letterSpacing: "0.04em",
+    color: ps.textPrimary,
+    padding: "0 18px 18px",
+    borderBottom: `1px solid ${ps.borderDefault}`,
+    marginBottom: 10,
   },
   list: {
     listStyle: "none",
@@ -201,21 +224,20 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 6,
     width: "100%",
-    padding: "6px 8px",
+    padding: "8px 10px",
     marginTop: 4,
     background: "none",
     border: "none",
     borderRadius: 6,
-    color: "#6b7280",
-    fontSize: 11,
-    fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    color: ps.textMuted,
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: "0.02em",
     cursor: "pointer",
     fontFamily: "inherit",
     textAlign: "left",
   },
-  chev: { fontSize: 9, color: "#4b5563", width: 14 },
+  chev: { fontSize: 10, color: ps.textDisabled, width: 14 },
   groupLabel: { flex: 1 },
   subList: {
     listStyle: "none",
@@ -230,44 +252,69 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    padding: "7px 10px",
+    padding: "8px 12px",
     background: "none",
     border: "none",
-    borderRadius: 6,
-    color: "#9ca3af",
-    fontSize: 13,
+    borderRadius: 8,
+    color: ps.textSecondary,
+    fontSize: 14,
     cursor: "pointer",
     textAlign: "left",
-    transition: "background 0.15s, color 0.15s",
+    transition: "background 180ms ease, color 180ms ease",
     fontFamily: "inherit",
   },
   itemActive: {
-    background: "#2e3250",
-    color: "#e2e8f0",
+    background: "rgba(0, 112, 204, 0.22)",
+    color: ps.textPrimary,
+    boxShadow: `inset 3px 0 0 ${ps.blue}`,
   },
   footer: {
     marginTop: "auto",
-    padding: "12px 16px 0",
-    borderTop: "1px solid #2e3250",
+    padding: "14px 18px 0",
+    borderTop: `1px solid ${ps.borderDefault}`,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
   },
-  footerLabel: { fontSize: 12, color: "#6b7280" },
+  badge: {
+    fontSize: 10,
+    fontWeight: 700,
+    minWidth: 18,
+    height: 18,
+    lineHeight: "18px",
+    textAlign: "center",
+    borderRadius: 9,
+    background: ps.borderStrong,
+    color: ps.textPrimary,
+    flexShrink: 0,
+  },
+  footerLabel: { fontSize: 12, color: ps.textMuted },
   pill: {
     fontSize: 11,
     fontWeight: 600,
     borderRadius: 999,
-    padding: "3px 10px",
-    border: "1px solid #2e3250",
-    color: "#9ca3af",
-    background: "#151722",
+    padding: "4px 12px",
+    border: `1px solid ${ps.borderStrong}`,
+    color: ps.textSecondary,
+    background: ps.surfacePanel,
     letterSpacing: "0.02em",
   },
-  pillReady: { borderColor: "#1f3a3a", color: "#a7f3d0", background: "#0b1f1a" },
-  pillLoading: { borderColor: "#2e3250", color: "#e2e8f0", background: "#151722" },
-  pillUnavailable: { borderColor: "#3a1f1f", color: "#fecaca", background: "#1f0b0b" },
+  pillReady: {
+    borderColor: ps.successBorder,
+    color: ps.successText,
+    background: ps.successBg,
+  },
+  pillLoading: {
+    borderColor: ps.borderStrong,
+    color: ps.textPrimary,
+    background: ps.surfacePanel,
+  },
+  pillUnavailable: {
+    borderColor: ps.dangerBorder,
+    color: ps.dangerText,
+    background: ps.dangerBg,
+  },
 };
 
 export default Sidebar;

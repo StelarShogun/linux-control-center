@@ -4,7 +4,9 @@ import type { JournalOperationAction } from "../types/generated/JournalOperation
 import type { OperationJournalEntry } from "../types/generated/OperationJournalEntry";
 import type { BackupAuditReport } from "../tauri/types";
 import { auditConfigBackups, deleteOrphanBackup, listRecentOperations } from "../tauri/api";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { psCard } from "../theme/componentStyles";
 
 /** Todas las acciones del journal (mantener alineado con `JournalOperationAction` generado). */
 const ALL_JOURNAL_ACTIONS: JournalOperationAction[] = [
@@ -116,19 +118,19 @@ const RecentOperationsPage: FC<Props> = ({ backendStatus }) => {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Últimas operaciones</h1>
-      <p style={styles.note}>
+      <h1 style={PAGE_HEADING}>Últimas operaciones</h1>
+      <p style={PAGE_NOTE}>
         Registro local de apply sandbox, apply real, apply live (Hyprland / Waybar), apply tema, apply wallpaper y rollback. Los datos viven en{" "}
         <code>journal/</code> dentro del directorio de datos de la app.
       </p>
 
       {backendStatus !== "ready" && (
-        <p style={styles.note}>Backend no disponible: no se puede cargar el journal.</p>
+        <p style={PAGE_NOTE}>Backend no disponible: no se puede cargar el journal.</p>
       )}
 
       {backendStatus === "ready" && (
         <div style={styles.toolbar}>
-          <button type="button" style={styles.btn} onClick={() => void load()} disabled={loading}>
+          <button type="button" className="ps-btn-secondary" onClick={() => void load()} disabled={loading}>
             {loading ? "Actualizando…" : "Actualizar"}
           </button>
           <input
@@ -175,7 +177,8 @@ const RecentOperationsPage: FC<Props> = ({ backendStatus }) => {
           )}
           <button
             type="button"
-            style={styles.btnSecondary}
+            className="ps-btn-primary"
+            style={{ fontSize: 13 }}
             disabled={loading || auditLoading}
             onClick={() => {
               setAuditError(null);
@@ -191,9 +194,9 @@ const RecentOperationsPage: FC<Props> = ({ backendStatus }) => {
         </div>
       )}
 
-      {error && <p style={{ ...styles.note, color: "#f87171" }}>{error}</p>}
+      {error && <p style={{ ...PAGE_NOTE, color: ps.dangerText }}>{error}</p>}
 
-      {auditError && <p style={{ ...styles.note, color: "#f87171" }}>{auditError}</p>}
+      {auditError && <p style={{ ...PAGE_NOTE, color: ps.dangerText }}>{auditError}</p>}
 
       {audit && (
         <div style={styles.auditBox}>
@@ -201,7 +204,14 @@ const RecentOperationsPage: FC<Props> = ({ backendStatus }) => {
           <p style={styles.auditSummary}>
             En disco (allowlist): {audit.disk_file_count} · Ref. journal/snapshots: {audit.referenced_name_count} ·
             Seguimiento total (incl. registro): {audit.tracked_union_count} · Posibles huérfanos:{" "}
-            <span style={{ color: audit.orphan_count > 0 ? "#fbbf24" : "#d1d5db" }}>{audit.orphan_count}</span> ·
+            <span
+              style={{
+                color: audit.orphan_count > 0 ? ps.warningText : ps.textSecondary,
+              }}
+            >
+              {audit.orphan_count}
+            </span>{" "}
+            ·
             Referenciados pero ausentes: {audit.referenced_missing_count}
           </p>
           <p style={styles.auditHint}>
@@ -210,7 +220,7 @@ const RecentOperationsPage: FC<Props> = ({ backendStatus }) => {
             confirmación.
           </p>
           {audit.rows.length === 0 ? (
-            <p style={styles.note}>Sin filas (no hay backups en disco ni referencias huérfanas en metadatos).</p>
+            <p style={PAGE_NOTE}>Sin filas (no hay backups en disco ni referencias huérfanas en metadatos).</p>
           ) : (
             <div style={{ overflowX: "auto" as const }}>
               <table style={{ ...styles.table, fontSize: 10 }}>
@@ -293,11 +303,11 @@ const RecentOperationsPage: FC<Props> = ({ backendStatus }) => {
       )}
 
       {backendStatus === "ready" && !loading && entries.length === 0 && !error && (
-        <p style={styles.note}>Aún no hay operaciones registradas.</p>
+        <p style={PAGE_NOTE}>Aún no hay operaciones registradas.</p>
       )}
 
       {backendStatus === "ready" && !loading && entries.length > 0 && filtered.length === 0 && (
-        <p style={styles.note}>Ninguna entrada coincide con los filtros. Ajusta búsqueda o filtros.</p>
+        <p style={PAGE_NOTE}>Ninguna entrada coincide con los filtros. Ajusta búsqueda o filtros.</p>
       )}
 
       {filtered.length > 0 && (
@@ -386,10 +396,8 @@ const RecentOperationsPage: FC<Props> = ({ backendStatus }) => {
 
 const styles: Record<string, React.CSSProperties> = {
   page: { ...PAGE_BASE },
-  heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 },
-  note: { fontSize: 12, color: "#6b7280", marginBottom: 16, lineHeight: 1.6 },
   toolbar: {
-    marginBottom: 12,
+    marginBottom: 14,
     display: "flex",
     flexWrap: "wrap" as const,
     gap: 10,
@@ -398,11 +406,11 @@ const styles: Record<string, React.CSSProperties> = {
   searchInput: {
     minWidth: 200,
     flex: "1 1 200px",
-    padding: "6px 10px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#151722",
-    color: "#e2e8f0",
+    padding: "8px 12px",
+    borderRadius: 3,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfaceInput,
+    color: ps.textPrimary,
     fontSize: 13,
     fontFamily: "inherit",
   },
@@ -411,93 +419,76 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center" as const,
     gap: 6,
     fontSize: 12,
-    color: "#9ca3af",
+    color: ps.textMuted,
   },
   select: {
-    padding: "5px 8px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#1e2030",
-    color: "#e2e8f0",
+    padding: "6px 10px",
+    borderRadius: 3,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfaceInput,
+    color: ps.textPrimary,
     fontSize: 12,
     fontFamily: "inherit",
   },
-  count: { fontSize: 12, color: "#6b7280", marginLeft: "auto" },
-  btn: {
-    padding: "6px 12px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#252840",
-    color: "#a0aec0",
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "inherit",
-  },
-  btnSecondary: {
-    padding: "6px 12px",
-    borderRadius: 6,
-    border: "1px solid #3d5a50",
-    background: "#15201c",
-    color: "#86efac",
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "inherit",
-  },
+  count: { fontSize: 12, color: ps.textMuted, marginLeft: "auto" },
   btnDanger: {
     padding: "4px 8px",
-    borderRadius: 4,
-    border: "1px solid #5a3030",
-    background: "#221010",
-    color: "#fca5a5",
+    borderRadius: 3,
+    border: `1px solid ${ps.dangerBorder}`,
+    background: ps.dangerBg,
+    color: ps.dangerText,
     cursor: "pointer",
     fontSize: 10,
     fontFamily: "inherit",
   },
   auditBox: {
-    marginBottom: 20,
-    padding: 14,
-    borderRadius: 8,
-    border: "1px solid #2e3250",
-    background: "#12141c",
+    marginBottom: 24,
+    padding: 16,
+    ...psCard,
   },
-  auditTitle: { fontSize: 13, fontWeight: 600, color: "#88c0d0", marginBottom: 8 },
-  auditSummary: { fontSize: 12, color: "#9ca3af", lineHeight: 1.5, marginBottom: 8 },
-  auditHint: { fontSize: 11, color: "#6b7280", lineHeight: 1.5, marginBottom: 10 },
-  tableWrap: { overflowX: "auto" as const, border: "1px solid #2e3250", borderRadius: 8 },
+  auditTitle: { fontSize: 14, fontWeight: 600, color: ps.textAccent, marginBottom: 8 },
+  auditSummary: { fontSize: 12, color: ps.textMuted, lineHeight: 1.5, marginBottom: 8 },
+  auditHint: { fontSize: 11, color: ps.textMuted, lineHeight: 1.5, marginBottom: 10 },
+  tableWrap: { overflowX: "auto" as const, ...psCard, padding: 0 },
   table: { width: "100%", borderCollapse: "collapse" as const, fontSize: 11 },
   th: {
     textAlign: "left" as const,
     padding: "8px 10px",
-    background: "#1e2030",
-    color: "#88c0d0",
-    borderBottom: "1px solid #2e3250",
+    background: ps.surfaceInput,
+    color: ps.textAccent,
+    borderBottom: `1px solid ${ps.borderDefault}`,
     whiteSpace: "nowrap" as const,
   },
-  td: { padding: "8px 10px", borderBottom: "1px solid #252840", color: "#d1d5db", verticalAlign: "top" as const },
-  tdStarted: { fontSize: 9, color: "#6b7280", marginTop: 4 },
+  td: {
+    padding: "8px 10px",
+    borderBottom: `1px solid ${ps.borderSubtle}`,
+    color: ps.textSecondary,
+    verticalAlign: "top" as const,
+  },
+  tdStarted: { fontSize: 9, color: ps.textMuted, marginTop: 4 },
   tdMono: {
     padding: "8px 10px",
-    borderBottom: "1px solid #252840",
+    borderBottom: `1px solid ${ps.borderSubtle}`,
     fontFamily: "monospace",
     fontSize: 10,
-    color: "#9ca3af",
+    color: ps.textMuted,
     verticalAlign: "top" as const,
     whiteSpace: "nowrap" as const,
   },
   tdMonoSmall: {
     padding: "8px 10px",
-    borderBottom: "1px solid #252840",
+    borderBottom: `1px solid ${ps.borderSubtle}`,
     fontFamily: "monospace",
     fontSize: 9,
-    color: "#9ca3af",
+    color: ps.textMuted,
     verticalAlign: "top" as const,
     maxWidth: 420,
     wordBreak: "break-all" as const,
   },
   tdError: {
     padding: "8px 10px",
-    borderBottom: "1px solid #252840",
-    color: "#fca5a5",
+    borderBottom: `1px solid ${ps.borderSubtle}`,
+    color: ps.dangerText,
     fontSize: 10,
     maxWidth: 360,
     wordBreak: "break-word" as const,
@@ -506,26 +497,34 @@ const styles: Record<string, React.CSSProperties> = {
   badge: {
     display: "inline-block",
     padding: "2px 8px",
-    borderRadius: 4,
+    borderRadius: 999,
     fontSize: 10,
     fontWeight: 600,
   },
-  badgeOk: { background: "#0b1f1a", color: "#6ee7b7", border: "1px solid #1a3a2a" },
-  badgeFail: { background: "#1f0b0b", color: "#fca5a5", border: "1px solid #3a1f1f" },
+  badgeOk: {
+    background: ps.successBg,
+    color: ps.successText,
+    border: `1px solid ${ps.successBorder}`,
+  },
+  badgeFail: {
+    background: ps.dangerBg,
+    color: ps.dangerText,
+    border: `1px solid ${ps.dangerBorder}`,
+  },
   tdId: {
     padding: "8px 10px",
-    borderBottom: "1px solid #252840",
+    borderBottom: `1px solid ${ps.borderSubtle}`,
     verticalAlign: "top" as const,
     whiteSpace: "nowrap" as const,
   },
-  idShort: { fontSize: 10, color: "#94a3b8", display: "block", marginBottom: 4 },
+  idShort: { fontSize: 10, color: ps.textMuted, display: "block", marginBottom: 4 },
   copyBtn: {
     padding: "2px 8px",
     fontSize: 10,
-    borderRadius: 4,
-    border: "1px solid #3d4466",
-    background: "#252840",
-    color: "#a0aec0",
+    borderRadius: 3,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfaceRaised,
+    color: ps.textSecondary,
     cursor: "pointer",
     fontFamily: "inherit",
   },

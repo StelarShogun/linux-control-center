@@ -11,7 +11,9 @@ import {
 import type { ApplyLiveResult, ApplyToRealPathResult } from "../tauri/types";
 import OpMessage, { type OpMsg } from "../components/OpMessage";
 import WriteResultPanel from "../components/WriteResultPanel";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { psCard } from "../theme/componentStyles";
 
 const VALID_POSITIONS = ["top", "bottom", "left", "right"] as const;
 
@@ -53,8 +55,8 @@ const WaybarPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) =>
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Waybar</h1>
-      <p style={styles.note}>
+      <h1 style={PAGE_HEADING}>Waybar</h1>
+      <p style={{ ...PAGE_NOTE, marginBottom: 24 }}>
         Controla posición, altura, módulos y opacidad de Waybar.
         Escribe <code>~/.config/waybar/config.jsonc</code> con backup automático.
         Apply live además envía <code>SIGUSR2</code> al proceso <code>waybar</code> (
@@ -270,7 +272,7 @@ const ModuleList: FC<{
   onChange: (v: string[]) => void;
 }> = ({ label, modules, onChange }) => (
   <div style={{ marginBottom: 16 }}>
-    <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 6 }}>
+    <div style={{ fontSize: 13, color: ps.textMuted, marginBottom: 6 }}>
       {label}
     </div>
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -287,49 +289,97 @@ const ModuleList: FC<{
         </span>
       ))}
     </div>
-    <p style={{ fontSize: 11, color: "#4b5563", marginTop: 6 }}>
+    <p style={{ fontSize: 11, color: ps.textDisabled, marginTop: 6 }}>
       Edición de módulos pendiente (add/reorder). Solo visualización.
     </p>
   </div>
 );
 
 const BTN_BASE: React.CSSProperties = {
-  borderRadius: 8, padding: "9px 14px", cursor: "pointer",
-  fontSize: 13, border: "1px solid", fontWeight: 500, flexShrink: 0,
+  borderRadius: 999,
+  padding: "9px 18px",
+  cursor: "pointer",
+  fontSize: 13,
+  border: "1px solid",
+  fontWeight: 500,
+  flexShrink: 0,
+  fontFamily: "inherit",
 };
 
 const styles: Record<string, React.CSSProperties> = {
   page: { ...PAGE_BASE },
-  heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
-  note: { fontSize: 12, color: "#6b7280", marginBottom: 24, lineHeight: 1.6 },
-  statusBanner: { fontSize: 12, color: "#9ca3af", background: "#151722", border: "1px solid #2e3250", borderRadius: 8, padding: "8px 12px", marginBottom: 24 },
-  statusBannerError: { color: "#fca5a5", background: "#1f0b0b", borderColor: "#3a1f1f" },
-  section: { marginBottom: 32 },
+  statusBanner: {
+    fontSize: 12,
+    color: ps.textMuted,
+    ...psCard,
+    padding: "10px 14px",
+    marginBottom: 24,
+  },
+  statusBannerError: {
+    color: ps.dangerText,
+    background: ps.dangerBg,
+    borderColor: ps.dangerBorder,
+  },
+  section: { marginBottom: 36 },
   sectionTitle: {
-    fontSize: 13, fontWeight: 600, color: "#88c0d0", textTransform: "uppercase",
-    letterSpacing: "0.08em", marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid #2e3250",
+    fontSize: 15,
+    fontWeight: 300,
+    color: ps.textAccent,
+    letterSpacing: "0.02em",
+    marginBottom: 14,
+    paddingBottom: 8,
+    borderBottom: `1px solid ${ps.borderDefault}`,
   },
   field: { display: "flex", alignItems: "center", gap: 16, marginBottom: 12 },
-  label: { width: 100, fontSize: 13, color: "#9ca3af", flexShrink: 0 },
-  select: { background: "#1e2030", border: "1px solid #2e3250", borderRadius: 6, color: "#e2e8f0", padding: "4px 8px", fontSize: 13 },
-  range: { width: 160, accentColor: "#88c0d0" },
-  rangeValue: { fontSize: 13, color: "#e2e8f0", fontFamily: "monospace" },
-  chip: { display: "inline-flex", alignItems: "center", gap: 4, background: "#2e3250", borderRadius: 4, padding: "3px 8px", fontSize: 12, color: "#c4c9e2", fontFamily: "monospace" },
-  chipRemove: { background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 },
+  label: { width: 100, fontSize: 13, color: ps.textMuted, flexShrink: 0 },
+  select: {
+    background: ps.surfaceInput,
+    border: `1px solid ${ps.borderStrong}`,
+    borderRadius: 3,
+    color: ps.textPrimary,
+    padding: "6px 10px",
+    fontSize: 13,
+  },
+  range: { width: 160, accentColor: ps.blue },
+  rangeValue: { fontSize: 13, color: ps.textPrimary, fontFamily: "monospace" },
+  chip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    background: "rgba(0, 112, 204, 0.2)",
+    borderRadius: 999,
+    padding: "3px 10px",
+    fontSize: 12,
+    color: ps.textSecondary,
+    fontFamily: "monospace",
+  },
+  chipRemove: {
+    background: "none",
+    border: "none",
+    color: ps.textMuted,
+    cursor: "pointer",
+    fontSize: 14,
+    lineHeight: 1,
+    padding: 0,
+  },
   actionRow: { display: "flex", flexWrap: "wrap" as const, gap: 8, marginTop: 8 },
-  saveBtn: { ...BTN_BASE, background: "#2e3250", borderColor: "#2e3250", color: "#e2e8f0" },
-  saveBtnNeutral: { ...BTN_BASE, background: "#1e2030", borderColor: "#2e3250", color: "#9ca3af" },
-  saveBtnAmber: { ...BTN_BASE, background: "#1a1500", borderColor: "#4a3f20", color: "#fbbf24" },
-  saveBtnGreen: { ...BTN_BASE, background: "#0b1f1a", borderColor: "#1a3a2a", color: "#6ee7b7" },
-  previewContainer: { marginTop: 24 },
-  previewLabel: { fontSize: 11, color: "#6b7280", marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.06em" },
+  saveBtn: { ...BTN_BASE, background: ps.blue, borderColor: ps.blue, color: "#ffffff" },
+  saveBtnNeutral: { ...BTN_BASE, background: ps.surfaceRaised, borderColor: ps.borderStrong, color: ps.textSecondary },
+  saveBtnAmber: { ...BTN_BASE, background: ps.warningBg, borderColor: ps.warningBorder, color: ps.warningText },
+  saveBtnGreen: { ...BTN_BASE, background: ps.successBg, borderColor: ps.successBorder, color: ps.successText },
+  previewContainer: { marginTop: 28 },
+  previewLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: ps.textMuted,
+    marginBottom: 8,
+    letterSpacing: "0.02em",
+  },
   preview: {
-    background: "#151722",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
+    ...psCard,
     padding: 16,
     fontSize: 12,
-    color: "#88c0d0",
+    color: ps.textMono,
     overflow: "auto",
     fontFamily: "monospace",
     maxHeight: "min(55vh, 560px)",

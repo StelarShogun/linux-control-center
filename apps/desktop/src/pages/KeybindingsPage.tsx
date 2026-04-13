@@ -1,8 +1,23 @@
-import { useState, type FC } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FC } from "react";
 import type { AppSettings, HyprlandBind } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
-import { saveSettings } from "../tauri/api";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { hyprctlBindsJson, hyprctlSetKeyword } from "../tauri/api";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { BindEditDialog } from "../hyprland/BindEditDialog";
+import {
+  CATEGORY_BY_ID,
+  DIALOG_CATEGORIES,
+  categorizeDispatcher,
+  formatAction,
+} from "../hyprland/dispatchers";
+import { buildBindKeywordRest, buildUnbindKeywordRest } from "../hyprland/bindKeyword";
+import {
+  bindRuntimeStatus,
+  findRuntimeOverride,
+  parseHyprctlBindsJson,
+  type HyprctlBindEntry,
+} from "../hyprland/bindRuntime";
 
 interface Props {
   settings: AppSettings;
@@ -17,231 +32,384 @@ const emptyBind = (): HyprlandBind => ({
   args: "",
   description: "",
   enabled: true,
+  bind_type: "bind",
 });
+
+type ModalState =
+  | { mode: "closed" }
+  | { mode: "add" }
+  | { mode: "edit"; index: number };
 
 const KeybindingsPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) => {
   const binds = settings.hyprland.keyboard.binds;
-  const [modal, setModal] = useState<"add" | null>(null);
-  const [draft, setDraft] = useState<HyprlandBind>(emptyBind);
-  const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState<ModalState>({ mode: "closed" });
   const [msg, setMsg] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [runtime, setRuntime] = useState<HyprctlBindEntry[]>([]);
+  const [runtimeErr, setRuntimeErr] = useState<string | null>(null);
+  const undoBinds = useRef<string[]>([]);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const loadRuntime = useCallback(async () => {
+    if (backendStatus !== "ready") return;
+    setRuntimeErr(null);
+    try {
+      const raw = await hyprctlBindsJson();
+      setRuntime(parseHyprctlBindsJson(raw));
+    } catch (e) {
+      setRuntime([]);
+      setRuntimeErr(String(e));
+    }
+  }, [backendStatus]);
 
-  const setBinds = (next: HyprlandBind[]) => {
+  useEffect(() => {
+    void loadRuntime();
+  }, [loadRuntime]);
+
+  const commitBinds = (next: HyprlandBind[]) => {
+    const cur = settingsRef.current;
+    undoBinds.current = [
+      ...undoBinds.current.slice(-29),
+      JSON.stringify(cur.hyprland.keyboard.binds),
+    ];
     onSettingsChange({
-      ...settings,
+      ...cur,
       hyprland: {
-        ...settings.hyprland,
+        ...cur.hyprland,
         keyboard: { binds: next },
       },
     });
   };
 
-  const save = async () => {
-    if (backendStatus !== "ready") return;
-    setBusy(true);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
+      const t = e.target as HTMLElement;
+      if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+      e.preventDefault();
+      const prev = undoBinds.current.pop();
+      if (prev === undefined) return;
+      try {
+        const parsed = JSON.parse(prev) as HyprlandBind[];
+        const cur = settingsRef.current;
+        onSettingsChange({
+          ...cur,
+          hyprland: {
+            ...cur.hyprland,
+            keyboard: { binds: parsed },
+          },
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onSettingsChange]);
+
+  const indexedFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return binds
+      .map((b, idx) => ({ b, idx }))
+      .filter(({ b }) => {
+        if (!q) return true;
+        const hay = [
+          b.modifiers.join(" "),
+          b.key,
+          b.dispatcher,
+          b.args,
+          b.description,
+          b.bind_type,
+          formatAction(b.dispatcher, b.args),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      });
+  }, [binds, search]);
+
+  const byCategory = useMemo(() => {
+    const m = new Map<string, { b: HyprlandBind; idx: number }[]>();
+    const catOrder = [...DIALOG_CATEGORIES.map((c) => c.id), "advanced"];
+    for (const id of catOrder) {
+      m.set(id, []);
+    }
+    for (const row of indexedFiltered) {
+      const cid = categorizeDispatcher(row.b.dispatcher);
+      const bucket = m.get(cid) ?? m.get("advanced")!;
+      bucket.push(row);
+    }
+    return m;
+  }, [indexedFiltered]);
+
+  const applyLiveOne = async (b: HyprlandBind) => {
+    if (backendStatus !== "ready" || !b.enabled) return;
     setMsg(null);
     try {
-      const s = await saveSettings({ settings });
-      onSettingsChange(s);
-      setMsg("Guardado.");
+      const kw = (b.bind_type || "bind").trim() || "bind";
+      await hyprctlSetKeyword(kw, buildBindKeywordRest(b));
+      setMsg(`IPC: ${kw} aplicado.`);
+      await loadRuntime();
     } catch (e) {
-      setMsg(String(e));
-    } finally {
-      setBusy(false);
+      setMsg(`Error IPC: ${String(e)}`);
     }
   };
 
+  const adoptRuntimeForIndex = (idx: number, rt: HyprctlBindEntry) => {
+    const next = [...binds];
+    const cur = next[idx];
+    if (!cur) return;
+    next[idx] = {
+      ...cur,
+      dispatcher: rt.dispatcher,
+      args: String(rt.arg ?? ""),
+    };
+    commitBinds(next);
+    setMsg("Acción del compositor copiada al modelo guardado en la app.");
+  };
+
+  const unbindLiveOne = async (b: HyprlandBind) => {
+    if (backendStatus !== "ready") return;
+    setMsg(null);
+    try {
+      await hyprctlSetKeyword("unbind", buildUnbindKeywordRest(b));
+      setMsg("IPC: unbind aplicado.");
+      await loadRuntime();
+    } catch (e) {
+      setMsg(`Error unbind: ${String(e)}`);
+    }
+  };
+
+  const modalInitial = useMemo(() => {
+    if (modal.mode === "edit") return binds[modal.index] ?? emptyBind();
+    return emptyBind();
+  }, [modal, binds]);
+
   return (
-    <div style={styles.page}>
-      <h1 style={styles.heading}>Atajos (Hyprland)</h1>
-      <p style={styles.note}>
-        Se exportan como <code>bind = …</code> en el include gestionado. Usa{" "}
-        <strong>«Sync desde sistema»</strong> arriba para importar <code>hyprland.conf</code>, archivos{" "}
-        <code>source = …</code> y <code>hyprland.d/*.conf</code> (incl. <code>bindl</code>,{" "}
-        <code>bindd</code>, etc.).
+    <div style={styles.page} data-no-global-undo>
+      <h1 style={PAGE_HEADING}>Atajos (Hyprland)</h1>
+      <p style={PAGE_NOTE}>
+        Editor al estilo HyprMod: categorías por dispatcher, comparación con{" "}
+        <code>hyprctl binds -j</code>, e IPC en vivo con <code>hyprctl keyword</code>. Los atajos se
+        exportan en el include gestionado al aplicar config. <strong>Guardar en disco</strong> usa el
+        banner superior o <kbd>Ctrl+S</kbd> cuando haya cambios pendientes.
       </p>
       {msg && (
-        <p style={{ ...styles.note, color: msg.startsWith("Error") ? "#f87171" : "#4ade80" }}>{msg}</p>
+        <p
+          style={{
+            ...PAGE_NOTE,
+            color: msg.startsWith("Error") ? ps.dangerText : ps.successText,
+          }}
+        >
+          {msg}
+        </p>
+      )}
+      {runtimeErr && (
+        <p style={{ ...PAGE_NOTE, color: ps.warningText }}>
+          No se pudo leer binds en vivo: {runtimeErr}
+        </p>
       )}
       <div style={styles.toolbar}>
-        <button type="button" style={styles.btn} onClick={() => { setDraft(emptyBind()); setModal("add"); }}>
-          Añadir atajo
+        <input
+          type="search"
+          placeholder="Buscar atajos…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={styles.searchIn}
+        />
+        <button type="button" className="ps-btn-secondary" onClick={() => void loadRuntime()}>
+          Refrescar binds en vivo
         </button>
         <button
           type="button"
-          style={styles.btnPrimary}
-          disabled={backendStatus !== "ready" || busy}
-          onClick={() => void save()}
+          className="ps-btn-secondary"
+          onClick={() => {
+            setModal({ mode: "add" });
+          }}
         >
-          {busy ? "Guardando…" : "Guardar en la app"}
+          Añadir atajo
         </button>
       </div>
+
       {binds.length === 0 ? (
         <div style={styles.emptyPanel}>
-          <p style={styles.note}>No hay atajos en la app todavía.</p>
+          <p style={PAGE_NOTE}>No hay atajos en la app todavía.</p>
           <p style={styles.noteMuted}>
-            Pulsa «Sync desde sistema» en la barra superior para leer tus binds reales desde disco.
+            Pulsa «Añadir atajo» o sincroniza desde la barra superior si tu config ya tiene binds.
           </p>
         </div>
       ) : (
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Act.</th>
-                <th style={styles.th}>Mods</th>
-                <th style={styles.th}>Tecla</th>
-                <th style={styles.th}>Dispatcher</th>
-                <th style={styles.th}>Args</th>
-                <th style={styles.th}>Nota</th>
-                <th style={styles.th} />
-              </tr>
-            </thead>
-            <tbody>
-              {binds.map((b, idx) => (
-                <tr key={idx}>
-                  <td style={styles.td}>
-                    <input
-                      type="checkbox"
-                      checked={b.enabled}
-                      onChange={(e) => {
-                        const next = [...binds];
-                        next[idx] = { ...b, enabled: e.target.checked };
-                        setBinds(next);
-                      }}
-                    />
-                  </td>
-                  <td style={styles.tdMono}>
-                    <input
-                      style={styles.in}
-                      value={b.modifiers.join(" ")}
-                      onChange={(e) => {
-                        const mods = e.target.value.split(/\s+/).filter(Boolean);
-                        const next = [...binds];
-                        next[idx] = { ...b, modifiers: mods.length > 0 ? mods : ["SUPER"] };
-                        setBinds(next);
-                      }}
-                    />
-                  </td>
-                  <td style={styles.tdMono}>
-                    <input
-                      style={styles.in}
-                      value={b.key}
-                      onChange={(e) => {
-                        const next = [...binds];
-                        next[idx] = { ...b, key: e.target.value };
-                        setBinds(next);
-                      }}
-                    />
-                  </td>
-                  <td style={styles.tdMono}>
-                    <input
-                      style={styles.in}
-                      value={b.dispatcher}
-                      onChange={(e) => {
-                        const next = [...binds];
-                        next[idx] = { ...b, dispatcher: e.target.value };
-                        setBinds(next);
-                      }}
-                    />
-                  </td>
-                  <td style={styles.tdMono}>
-                    <input
-                      style={styles.in}
-                      value={b.args}
-                      onChange={(e) => {
-                        const next = [...binds];
-                        next[idx] = { ...b, args: e.target.value };
-                        setBinds(next);
-                      }}
-                    />
-                  </td>
-                  <td style={styles.tdMono}>
-                    <input
-                      style={styles.in}
-                      value={b.description}
-                      onChange={(e) => {
-                        const next = [...binds];
-                        next[idx] = { ...b, description: e.target.value };
-                        setBinds(next);
-                      }}
-                      placeholder="bindd / nota"
-                    />
-                  </td>
-                  <td style={styles.td}>
-                    <button
-                      type="button"
-                      style={styles.btnDanger}
-                      onClick={() => setBinds(binds.filter((_, i) => i !== idx))}
-                    >
-                      Quitar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={styles.scroll}>
+          {[...DIALOG_CATEGORIES.map((c) => c.id), "advanced"].map((catId) => {
+            const rows = byCategory.get(catId) ?? [];
+            if (rows.length === 0) return null;
+            const label = CATEGORY_BY_ID[catId]?.label ?? catId;
+            return (
+              <section key={catId} style={styles.catSection}>
+                <h2 style={styles.catTitle}>{label}</h2>
+                <div style={styles.tableWrap}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>Act.</th>
+                        <th style={styles.th}>Tipo</th>
+                        <th style={styles.th}>Mods</th>
+                        <th style={styles.th}>Tecla</th>
+                        <th style={styles.th}>Acción</th>
+                        <th style={styles.th}>Runtime</th>
+                        <th style={styles.th}>IPC</th>
+                        <th style={styles.th} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map(({ b, idx }) => {
+                        const rt = findRuntimeOverride(b, runtime);
+                        const rtState = bindRuntimeStatus(b, runtime);
+                        return (
+                          <tr key={idx}>
+                            <td style={styles.td}>
+                              <input
+                                type="checkbox"
+                                checked={b.enabled}
+                                onChange={(e) => {
+                                  const next = [...binds];
+                                  next[idx] = { ...b, enabled: e.target.checked };
+                                  commitBinds(next);
+                                }}
+                              />
+                            </td>
+                            <td style={styles.tdMono}>
+                              <select
+                                style={styles.inSm}
+                                value={b.bind_type || "bind"}
+                                onChange={(e) => {
+                                  const next = [...binds];
+                                  next[idx] = { ...b, bind_type: e.target.value };
+                                  commitBinds(next);
+                                }}
+                              >
+                                {[
+                                  "bind",
+                                  "bindl",
+                                  "binde",
+                                  "bindm",
+                                  "bindr",
+                                  "bindn",
+                                  "bindd",
+                                  "binddr",
+                                ].map((t) => (
+                                  <option key={t} value={t}>
+                                    {t}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td style={styles.tdMono}>{b.modifiers.join(" ")}</td>
+                            <td style={styles.tdMono}>{b.key}</td>
+                            <td style={styles.tdMono}>{formatAction(b.dispatcher, b.args)}</td>
+                            <td style={styles.td}>
+                              {rtState === "no_runtime" && (
+                                <span style={{ fontSize: 11, color: ps.textMuted }} title="No hay bind en vivo para este combo">
+                                  Sin runtime
+                                </span>
+                              )}
+                              {rtState === "sync" && rt && (
+                                <span style={{ fontSize: 11, color: ps.successText }} title={`${rt.dispatcher} ${rt.arg ?? ""}`}>
+                                  En sync
+                                </span>
+                              )}
+                              {rtState === "override" && rt && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 220 }}>
+                                  <span style={styles.overrideBadge} title={`Runtime: ${rt.dispatcher} ${rt.arg ?? ""}`}>
+                                    Override en compositor
+                                  </span>
+                                  <button
+                                    type="button"
+                                    style={styles.btnMini}
+                                    disabled={backendStatus !== "ready" || !b.enabled || !b.key.trim()}
+                                    onClick={() => void adoptRuntimeForIndex(idx, rt)}
+                                  >
+                                    Adoptar runtime
+                                  </button>
+                                  <button
+                                    type="button"
+                                    style={styles.btnMiniMuted}
+                                    disabled={backendStatus !== "ready" || !b.enabled || !b.key.trim()}
+                                    onClick={() => void applyLiveOne(b)}
+                                    title="Vuelve a aplicar la acción guardada en la app"
+                                  >
+                                    Reaplicar guardado
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                            <td style={styles.td}>
+                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                                <button
+                                  type="button"
+                                  style={styles.btnMini}
+                                  disabled={backendStatus !== "ready" || !b.enabled || !b.key.trim()}
+                                  onClick={() => void applyLiveOne(b)}
+                                >
+                                  Live
+                                </button>
+                                <button
+                                  type="button"
+                                  style={styles.btnMiniMuted}
+                                  disabled={backendStatus !== "ready" || !b.key.trim()}
+                                  onClick={() => void unbindLiveOne(b)}
+                                >
+                                  Unbind
+                                </button>
+                              </div>
+                            </td>
+                            <td style={styles.td}>
+                              <div style={{ display: "flex", gap: 4 }}>
+                                <button
+                                  type="button"
+                                  className="ps-btn-secondary"
+                                  style={{ fontSize: 11, padding: "4px 8px" }}
+                                  onClick={() => setModal({ mode: "edit", index: idx })}
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  style={styles.btnDanger}
+                                  onClick={() => commitBinds(binds.filter((_, i) => i !== idx))}
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
-      {modal === "add" && (
-        <div style={styles.overlay}>
-          <div style={styles.modal}>
-            <h2 style={styles.modalTitle}>Nuevo atajo</h2>
-            <label style={styles.lab}>
-              Modificadores (espacio)
-              <input
-                style={styles.inFull}
-                value={draft.modifiers.join(" ")}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    modifiers: e.target.value.split(/\s+/).filter(Boolean) || ["SUPER"],
-                  })
-                }
-              />
-            </label>
-            <label style={styles.lab}>
-              Tecla
-              <input
-                style={styles.inFull}
-                value={draft.key}
-                onChange={(e) => setDraft({ ...draft, key: e.target.value })}
-              />
-            </label>
-            <label style={styles.lab}>
-              Dispatcher
-              <input
-                style={styles.inFull}
-                value={draft.dispatcher}
-                onChange={(e) => setDraft({ ...draft, dispatcher: e.target.value })}
-              />
-            </label>
-            <label style={styles.lab}>
-              Argumentos
-              <input
-                style={styles.inFull}
-                value={draft.args}
-                onChange={(e) => setDraft({ ...draft, args: e.target.value })}
-              />
-            </label>
-            <div style={styles.modalActions}>
-              <button type="button" style={styles.btn} onClick={() => setModal(null)}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                style={styles.btnPrimary}
-                onClick={() => {
-                  setBinds([...binds, draft]);
-                  setModal(null);
-                }}
-              >
-                Añadir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+      <BindEditDialog
+        title={modal.mode === "edit" ? "Editar atajo" : "Nuevo atajo"}
+        open={modal.mode === "add" || modal.mode === "edit"}
+        initial={modalInitial}
+        onClose={() => setModal({ mode: "closed" })}
+        onSave={(b) => {
+          if (modal.mode === "add") {
+            commitBinds([...binds, b]);
+          } else if (modal.mode === "edit") {
+            const next = [...binds];
+            next[modal.index] = b;
+            commitBinds(next);
+          }
+          setModal({ mode: "closed" });
+        }}
+      />
     </div>
   );
 };
@@ -255,46 +423,65 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: 0,
     minWidth: 0,
   },
-  heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 },
-  note: { fontSize: 12, color: "#6b7280", marginBottom: 16 },
-  noteMuted: { fontSize: 12, color: "#4b5563", marginTop: 8, lineHeight: 1.5 },
+  noteMuted: { fontSize: 12, color: ps.textDisabled, marginTop: 8, lineHeight: 1.5 },
   emptyPanel: {
     flex: 1,
     minHeight: 200,
-    padding: 24,
-    borderRadius: 8,
-    border: "1px dashed #2e3250",
-    background: "#151722",
+    padding: 28,
+    borderRadius: 12,
+    border: `1px dashed ${ps.borderStrong}`,
+    background: ps.surfacePanel,
   },
-  tableWrap: { overflow: "auto", flex: 1, minHeight: 0, width: "100%" },
-  toolbar: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" },
-  btn: {
-    padding: "6px 14px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#252840",
-    color: "#a0aec0",
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "inherit",
+  scroll: { overflow: "auto", flex: 1, minHeight: 0, width: "100%" },
+  catSection: { marginBottom: 28 },
+  catTitle: {
+    fontSize: 14,
+    fontWeight: 300,
+    color: ps.textAccent,
+    marginBottom: 10,
+    letterSpacing: "0.02em",
   },
-  btnPrimary: {
-    padding: "6px 14px",
-    borderRadius: 6,
-    border: "1px solid #3d5a50",
-    background: "#15201c",
-    color: "#86efac",
-    cursor: "pointer",
+  tableWrap: { overflow: "auto", width: "100%" },
+  toolbar: { display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" },
+  searchIn: {
+    flex: 1,
+    minWidth: 160,
+    maxWidth: 320,
+    padding: "8px 12px",
+    borderRadius: 3,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfaceInput,
+    color: ps.textPrimary,
     fontSize: 13,
     fontFamily: "inherit",
   },
   btnDanger: {
-    padding: "4px 8px",
+    padding: "4px 10px",
     fontSize: 11,
-    borderRadius: 4,
-    border: "1px solid #5a3030",
-    background: "#221010",
-    color: "#fca5a5",
+    borderRadius: 3,
+    border: `1px solid ${ps.dangerBorder}`,
+    background: ps.dangerBg,
+    color: ps.dangerText,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  btnMini: {
+    padding: "3px 8px",
+    fontSize: 10,
+    borderRadius: 3,
+    border: `1px solid ${ps.successBorder}`,
+    background: ps.successBg,
+    color: ps.successText,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  btnMiniMuted: {
+    padding: "3px 8px",
+    fontSize: 10,
+    borderRadius: 3,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfaceRaised,
+    color: ps.textSecondary,
     cursor: "pointer",
     fontFamily: "inherit",
   },
@@ -302,54 +489,30 @@ const styles: Record<string, React.CSSProperties> = {
   th: {
     textAlign: "left",
     padding: 8,
-    background: "#1e2030",
-    color: "#88c0d0",
-    borderBottom: "1px solid #2e3250",
+    background: ps.surfaceInput,
+    color: ps.textAccent,
+    borderBottom: `1px solid ${ps.borderDefault}`,
   },
-  td: { padding: 8, borderBottom: "1px solid #252840", verticalAlign: "middle" },
-  tdMono: { padding: 8, borderBottom: "1px solid #252840" },
-  in: {
-    width: "100%",
-    minWidth: 80,
-    padding: 4,
-    background: "#151722",
-    border: "1px solid #3d4466",
-    borderRadius: 4,
-    color: "#e2e8f0",
+  td: { padding: 8, borderBottom: `1px solid ${ps.borderSubtle}`, verticalAlign: "middle" },
+  tdMono: { padding: 8, borderBottom: `1px solid ${ps.borderSubtle}`, fontFamily: "monospace", fontSize: 11 },
+  inSm: {
+    padding: 2,
+    background: ps.surfaceCode,
+    border: `1px solid ${ps.borderStrong}`,
+    borderRadius: 3,
+    color: ps.textPrimary,
     fontFamily: "monospace",
-    fontSize: 11,
+    fontSize: 10,
+    maxWidth: 88,
   },
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.55)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 100,
+  overrideBadge: {
+    fontSize: 10,
+    color: ps.warningText,
+    background: ps.warningBg,
+    border: `1px solid ${ps.warningBorder}`,
+    borderRadius: 3,
+    padding: "2px 6px",
   },
-  modal: {
-    background: "#1a1c28",
-    border: "1px solid #2e3250",
-    borderRadius: 10,
-    padding: 20,
-    width: "min(420px, 92vw)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-  modalTitle: { fontSize: 16, color: "#e2e8f0", margin: 0 },
-  lab: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#9ca3af" },
-  inFull: {
-    padding: 8,
-    background: "#151722",
-    border: "1px solid #3d4466",
-    borderRadius: 6,
-    color: "#e2e8f0",
-    fontFamily: "inherit",
-    fontSize: 13,
-  },
-  modalActions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 },
 };
 
 export default KeybindingsPage;

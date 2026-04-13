@@ -8,6 +8,7 @@
  */
 export type { AppSettings } from "./AppSettings";
 export type { AppearanceSettings } from "./AppearanceSettings";
+export type { HyprlandBezierCurve } from "./HyprlandBezierCurve";
 export type { HyprlandBind } from "./HyprlandBind";
 export type { HyprlandInputSettings } from "./HyprlandInputSettings";
 export type { HyprlandKeyboardSettings } from "./HyprlandKeyboardSettings";

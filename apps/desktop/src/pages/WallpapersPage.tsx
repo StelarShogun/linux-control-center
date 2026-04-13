@@ -13,7 +13,9 @@ import {
   refreshWallpaperCatalog,
 } from "../tauri/api";
 import type { CurrentWallpaperState } from "../types/generated/CurrentWallpaperState";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { psCard } from "../theme/componentStyles";
 
 interface Props {
   backendStatus: BackendStatus;
@@ -158,15 +160,15 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Wallpapers</h1>
-      <p style={styles.note}>
+      <h1 style={PAGE_HEADING}>Wallpapers</h1>
+      <p style={{ ...PAGE_NOTE, marginBottom: 12 }}>
         Catálogo limitado a proyectos de Wallpaper Engine. Los IDs son opacos; el apply usa el
         binario configurado (<code>LCC_WALLPAPER_APPLY_BIN</code> o <code>lcc-wallpaper-helper</code>
         ).
       </p>
 
       {backendStatus !== "ready" && (
-        <p style={styles.warn}>Backend no disponible — ejecuta la app con Tauri.</p>
+        <p style={{ ...PAGE_NOTE, color: ps.warningText }}>Backend no disponible — ejecuta la app con Tauri.</p>
       )}
 
       {backendStatus === "ready" && (
@@ -184,10 +186,14 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
                   : "…"}
               </div>
             </div>
-            <button type="button" style={styles.btn} disabled={busy} onClick={() => void handleRefresh()}>
+            <button type="button" className="ps-btn-secondary" disabled={busy} onClick={() => void handleRefresh()}>
               {busy ? "…" : "Actualizar catálogo"}
             </button>
-            <button type="button" style={styles.btn} onClick={() => void getCurrentWallpaper().then(setCurrent)}>
+            <button
+              type="button"
+              className="ps-btn-secondary"
+              onClick={() => void getCurrentWallpaper().then(setCurrent)}
+            >
               Refrescar estado
             </button>
           </section>
@@ -195,7 +201,7 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
           <div style={styles.split}>
             <div style={styles.listPane}>
               {entries.length === 0 && (
-                <p style={styles.note}>
+                <p style={PAGE_NOTE}>
                   Sin proyectos de Wallpaper Engine. Pulsa «Actualizar catálogo» o revisa la
                   librería de Wallpaper Engine bajo tu HOME.
                 </p>
@@ -227,14 +233,15 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
             <div style={styles.previewPane}>
               <div style={styles.previewTitle}>Vista previa</div>
               {preview?.type === "unavailable" && (
-                <p style={styles.note}>{preview.reason}</p>
+                <p style={PAGE_NOTE}>{preview.reason}</p>
               )}
               {previewSrc && (
                 <img src={previewSrc} alt="" style={styles.previewImg} />
               )}
               <button
                 type="button"
-                style={styles.applyBtn}
+                className="ps-btn-primary"
+                style={{ width: "100%" }}
                 disabled={!selectedId || busy}
                 onClick={() => void handleApply()}
               >
@@ -246,7 +253,14 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
       )}
 
       {message && (
-        <p style={{ ...styles.banner, color: message.kind === "ok" ? "#4ade80" : "#f87171" }}>{message.text}</p>
+        <p
+          style={{
+            ...styles.banner,
+            color: message.kind === "ok" ? ps.successText : ps.dangerText,
+          }}
+        >
+          {message.text}
+        </p>
       )}
     </div>
   );
@@ -254,30 +268,15 @@ const WallpapersPage: FC<Props> = ({ backendStatus }) => {
 
 const styles: Record<string, React.CSSProperties> = {
   page: { ...PAGE_BASE },
-  heading: { fontSize: 22, fontWeight: 600, marginBottom: 8, color: "#e2e8f0" },
-  note: { fontSize: 13, color: "#94a3b8", lineHeight: 1.5, marginBottom: 12 },
-  warn: { color: "#fbbf24", fontSize: 13 },
-  bar: { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start", marginBottom: 16 },
+  bar: { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start", marginBottom: 18 },
   statusBox: {
     flex: 1,
     minWidth: 200,
-    padding: 10,
-    background: "#151722",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
+    padding: 12,
+    ...psCard,
   },
-  statusTitle: { fontSize: 11, color: "#6b7280", textTransform: "uppercase", marginBottom: 4 },
-  statusText: { fontSize: 12, color: "#cbd5e1", lineHeight: 1.4 },
-  btn: {
-    padding: "8px 14px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#252840",
-    color: "#e2e8f0",
-    cursor: "pointer",
-    fontSize: 13,
-    alignSelf: "flex-end",
-  },
+  statusTitle: { fontSize: 11, fontWeight: 600, color: ps.textMuted, letterSpacing: "0.04em", marginBottom: 4 },
+  statusText: { fontSize: 12, color: ps.textSecondary, lineHeight: 1.4 },
   split: {
     display: "flex",
     gap: 20,
@@ -291,41 +290,33 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight: "calc(100vh - 260px)",
     overflow: "auto",
   },
-  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 },
+  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 },
   listItem: {
     width: "100%",
     textAlign: "left",
     padding: "10px 12px",
-    borderRadius: 8,
-    border: "1px solid #2e3250",
-    background: "#1a1d2e",
-    color: "#e2e8f0",
+    borderRadius: 12,
+    border: `1px solid ${ps.borderDefault}`,
+    background: ps.surfacePanel,
+    color: ps.textPrimary,
     cursor: "pointer",
+    transition: "border-color 180ms ease, background 180ms ease",
   },
-  listItemActive: { borderColor: "#88c0d0", background: "#252840" },
+  listItemActive: {
+    borderColor: ps.blue,
+    background: "rgba(0, 112, 204, 0.12)",
+  },
   listTitle: { display: "block", fontSize: 14, fontWeight: 500 },
-  listMeta: { display: "block", fontSize: 11, color: "#6b7280", marginTop: 2 },
+  listMeta: { display: "block", fontSize: 11, color: ps.textMuted, marginTop: 2 },
   previewPane: {
     flex: "1 1 340px",
     minWidth: 280,
     minHeight: 280,
     padding: 16,
-    background: "#151722",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
+    ...psCard,
   },
-  previewTitle: { fontSize: 12, color: "#88c0d0", marginBottom: 10 },
-  previewImg: { maxWidth: "100%", maxHeight: 220, borderRadius: 6, marginBottom: 12 },
-  applyBtn: {
-    width: "100%",
-    padding: "10px",
-    borderRadius: 8,
-    border: "none",
-    background: "#0f766e",
-    color: "#ecfdf5",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
+  previewTitle: { fontSize: 12, fontWeight: 600, color: ps.textAccent, marginBottom: 10 },
+  previewImg: { maxWidth: "100%", maxHeight: 220, borderRadius: 12, marginBottom: 12 },
   banner: { marginTop: 16, fontSize: 13 },
 };
 

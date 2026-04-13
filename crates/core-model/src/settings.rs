@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -28,7 +30,11 @@ impl Default for AppearanceSettings {
     }
 }
 
-/// Atajo de teclado Hyprland (`bind = …`).
+fn default_hyprland_bind_type() -> String {
+    "bind".into()
+}
+
+/// Atajo de teclado Hyprland (`bind = …`, `bindl = …`, etc.).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../../apps/desktop/src/types/generated/")]
 pub struct HyprlandBind {
@@ -38,6 +44,9 @@ pub struct HyprlandBind {
     pub args: String,
     pub description: String,
     pub enabled: bool,
+    /// Tipo de línea Hyprland: `bind`, `bindl`, `binde`, `bindm`, `bindd`, …
+    #[serde(default = "default_hyprland_bind_type")]
+    pub bind_type: String,
 }
 
 impl Default for HyprlandBind {
@@ -49,6 +58,7 @@ impl Default for HyprlandBind {
             args: String::new(),
             description: String::new(),
             enabled: true,
+            bind_type: default_hyprland_bind_type(),
         }
     }
 }
@@ -124,6 +134,17 @@ impl Default for HyprlandInputSettings {
     }
 }
 
+/// Curva Bézier cúbica (control points P1 P2) para animaciones Hyprland.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../../apps/desktop/src/types/generated/")]
+pub struct HyprlandBezierCurve {
+    pub name: String,
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32,
+}
+
 /// Configuración del compositor Hyprland.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../../apps/desktop/src/types/generated/")]
@@ -144,6 +165,12 @@ pub struct HyprlandSettings {
     pub windows: HyprlandWindowSettings,
     #[serde(default)]
     pub input: HyprlandInputSettings,
+    /// Curvas Bézier definidas por el usuario (`bezier = …` en animaciones).
+    #[serde(default)]
+    pub bezier_curves: Vec<HyprlandBezierCurve>,
+    /// Valores de opciones del schema IPC-only (clave Hyprland → valor keyword).
+    #[serde(default)]
+    pub schema_overrides: HashMap<String, String>,
 }
 
 impl Default for HyprlandSettings {
@@ -162,6 +189,8 @@ impl Default for HyprlandSettings {
             keyboard: HyprlandKeyboardSettings::default(),
             windows: HyprlandWindowSettings::default(),
             input: HyprlandInputSettings::default(),
+            bezier_curves: Vec::new(),
+            schema_overrides: HashMap::new(),
         }
     }
 }

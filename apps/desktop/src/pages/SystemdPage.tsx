@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type FC } from "react";
 import type { BackendStatus } from "../types/backend";
 import { type ListUnitsResponse, type UnitStatusDto, listSystemdUnits } from "../tauri/api";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { psCard } from "../theme/componentStyles";
 
 interface Props {
   backendStatus: BackendStatus;
@@ -47,15 +49,15 @@ const SystemdPage: FC<Props> = ({ backendStatus }) => {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Systemd</h1>
-      <p style={styles.note}>
+      <h1 style={PAGE_HEADING}>Systemd</h1>
+      <p style={{ ...PAGE_NOTE, marginBottom: 24 }}>
         Solo lectura. No se realizan cambios en el sistema. Los datos provienen de D-Bus o del
         fixture embebido si D-Bus no está disponible.
       </p>
 
-      {backendStatus === "loading" && <p style={styles.note}>Cargando…</p>}
+      {backendStatus === "loading" && <p style={PAGE_NOTE}>Cargando…</p>}
       {backendStatus === "unavailable" && (
-        <p style={{ ...styles.note, color: "#fecaca" }}>
+        <p style={{ ...PAGE_NOTE, color: ps.dangerText }}>
           Backend no disponible (modo web build). Sin datos de systemd.
         </p>
       )}
@@ -184,41 +186,40 @@ const DetailRow: FC<{ label: string; value: string }> = ({ label, value }) => (
 
 const styles: Record<string, React.CSSProperties> = {
   page: { ...PAGE_BASE },
-  heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
-  note: { fontSize: 12, color: "#6b7280", marginBottom: 24 },
   toolbar: {
     display: "flex",
     alignItems: "center",
     gap: 12,
     flexWrap: "wrap",
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  kindFilters: { display: "flex", gap: 4, flexWrap: "wrap" },
+  kindFilters: { display: "flex", gap: 6, flexWrap: "wrap" },
   kindBtn: {
-    background: "#1a1d2e",
-    border: "1px solid #2e3250",
-    borderRadius: 4,
-    color: "#6b7280",
+    background: ps.surfacePanel,
+    border: `1px solid ${ps.borderDefault}`,
+    borderRadius: 999,
+    color: ps.textMuted,
     fontSize: 11,
-    padding: "3px 8px",
+    padding: "4px 10px",
     cursor: "pointer",
     fontFamily: "monospace",
   },
   kindBtnActive: {
-    background: "#2e3250",
-    borderColor: "#88c0d0",
-    color: "#88c0d0",
+    background: "rgba(0, 112, 204, 0.2)",
+    borderColor: ps.blue,
+    color: ps.textAccent,
   },
-  checkLabel: { fontSize: 13, color: "#9ca3af", display: "flex", alignItems: "center" },
+  checkLabel: { fontSize: 13, color: ps.textMuted, display: "flex", alignItems: "center" },
   refreshBtn: {
-    background: "#2e3250",
-    border: "1px solid #2e3250",
-    borderRadius: 6,
-    color: "#e2e8f0",
+    background: ps.blue,
+    border: `1px solid ${ps.blue}`,
+    borderRadius: 999,
+    color: "#ffffff",
     fontSize: 13,
-    padding: "6px 12px",
+    padding: "8px 16px",
     cursor: "pointer",
     marginLeft: "auto",
+    fontWeight: 500,
   },
   sourceRow: {
     display: "flex",
@@ -235,28 +236,28 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.02em",
   },
   sourceDbus: {
-    borderColor: "#1f3a3a",
-    color: "#a7f3d0",
-    background: "#0b1f1a",
+    borderColor: ps.successBorder,
+    color: ps.successText,
+    background: ps.successBg,
   },
   sourceFixture: {
-    borderColor: "#3a2e1f",
-    color: "#fcd34d",
-    background: "#1f1a0b",
+    borderColor: ps.warningBorder,
+    color: ps.warningText,
+    background: ps.warningBg,
   },
-  unitCount: { fontSize: 12, color: "#6b7280" },
+  unitCount: { fontSize: 12, color: ps.textMuted },
   errorBanner: {
-    background: "#1f0b0b",
-    border: "1px solid #3a1f1f",
-    borderRadius: 8,
-    color: "#fecaca",
+    background: ps.dangerBg,
+    border: `1px solid ${ps.dangerBorder}`,
+    borderRadius: 12,
+    color: ps.dangerText,
     fontSize: 13,
-    padding: "10px 12px",
+    padding: "10px 14px",
     marginBottom: 12,
   },
   layout: {
     display: "flex",
-    gap: 16,
+    gap: 20,
     alignItems: "stretch",
     width: "100%",
     minHeight: "min(72vh, 720px)",
@@ -267,11 +268,10 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: "min(100%, 480px)",
     maxHeight: "calc(100vh - 220px)",
     overflowY: "auto",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    background: "#151722",
+    ...psCard,
+    padding: 0,
   },
-  empty: { padding: 20, fontSize: 13, color: "#6b7280", textAlign: "center" },
+  empty: { padding: 20, fontSize: 13, color: ps.textMuted, textAlign: "center" },
   unitRow: {
     display: "flex",
     alignItems: "center",
@@ -280,16 +280,16 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "8px 12px",
     background: "none",
     border: "none",
-    borderBottom: "1px solid #1e2030",
-    color: "#9ca3af",
+    borderBottom: `1px solid ${ps.borderSubtle}`,
+    color: ps.textMuted,
     fontSize: 12,
     fontFamily: "monospace",
     cursor: "pointer",
     textAlign: "left",
   },
   unitRowSelected: {
-    background: "#2e3250",
-    color: "#e2e8f0",
+    background: "rgba(0, 112, 204, 0.15)",
+    color: ps.textPrimary,
   },
   unitName: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   badge: {
@@ -301,37 +301,47 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
     marginLeft: 8,
   },
-  badgeActive: { borderColor: "#1f3a3a", color: "#a7f3d0", background: "#0b1f1a" },
-  badgeFailed: { borderColor: "#3a1f1f", color: "#fecaca", background: "#1f0b0b" },
-  badgeOther: { borderColor: "#2e3250", color: "#6b7280", background: "#151722" },
+  badgeActive: {
+    borderColor: ps.successBorder,
+    color: ps.successText,
+    background: ps.successBg,
+  },
+  badgeFailed: {
+    borderColor: ps.dangerBorder,
+    color: ps.dangerText,
+    background: ps.dangerBg,
+  },
+  badgeOther: {
+    borderColor: ps.borderDefault,
+    color: ps.textMuted,
+    background: ps.surfacePanel,
+  },
   detailPane: {
     flex: "1 1 58%",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    background: "#151722",
-    padding: 20,
+    ...psCard,
+    padding: 22,
     minWidth: 0,
     minHeight: 200,
   },
   detailPlaceholder: {
     fontSize: 13,
-    color: "#6b7280",
+    color: ps.textMuted,
     lineHeight: 1.6,
     padding: "24px 8px",
   },
   detailHeader: {
     fontSize: 14,
     fontWeight: 600,
-    color: "#e2e8f0",
+    color: ps.textPrimary,
     fontFamily: "monospace",
     marginBottom: 6,
     wordBreak: "break-all",
   },
-  detailDesc: { fontSize: 13, color: "#9ca3af", marginBottom: 16 },
+  detailDesc: { fontSize: 13, color: ps.textMuted, marginBottom: 16 },
   detailTable: { borderCollapse: "collapse", width: "100%" },
   detailLabel: {
     fontSize: 12,
-    color: "#6b7280",
+    color: ps.textMuted,
     paddingRight: 16,
     paddingBottom: 6,
     verticalAlign: "top",
@@ -339,7 +349,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   detailValue: {
     fontSize: 12,
-    color: "#e2e8f0",
+    color: ps.textPrimary,
     fontFamily: "monospace",
     paddingBottom: 6,
     wordBreak: "break-all",

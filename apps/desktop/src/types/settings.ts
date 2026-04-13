@@ -10,6 +10,7 @@
 export type {
   AppSettings,
   AppearanceSettings,
+  HyprlandBezierCurve,
   HyprlandBind,
   HyprlandInputSettings,
   HyprlandKeyboardSettings,
@@ -47,6 +48,8 @@ export const defaultSettings: AppSettings = {
     blur_size: 4,
     blur_passes: 2,
     keyboard: { binds: [] },
+    bezier_curves: [],
+    schema_overrides: {},
     windows: { rules: [] },
     input: {
       kb_layout: "us",

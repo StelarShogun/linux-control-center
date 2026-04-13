@@ -1,4 +1,9 @@
-use adapters_hyprland::{adapter as hyprland_adapter, reload_compositor};
+use adapters_hyprland::{
+    adapter as hyprland_adapter, binds_json as hyprctl_binds_json_inner,
+    get_option as hyprctl_get_option_inner, monitors_json as hyprctl_monitors_json_inner,
+    reload_compositor, set_keyword as hyprctl_set_keyword_inner,
+    version_json as hyprctl_version_json_inner,
+};
 use adapters_network::NetworkInterface;
 use adapters_power::{PowerProfileKind, PowerStatus, SuspendSettings};
 use adapters_rofi::adapter as rofi_adapter;
@@ -298,6 +303,105 @@ pub fn save_profile(state: State<'_, AppState>, args: SaveProfileArgs) -> Result
     Ok(id)
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct ProfileListItemDto {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub created_at: String,
+}
+
+#[tauri::command]
+pub fn list_profiles_cmd(state: State<'_, AppState>) -> Result<Vec<ProfileListItemDto>, String> {
+    let items = persistence::list_profiles(&state.data_dir).map_err(map_err)?;
+    Ok(items
+        .into_iter()
+        .map(|p| ProfileListItemDto {
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            created_at: p.created_at,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn delete_profile_cmd(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    persistence::delete_profile_file(&state.data_dir, &id).map_err(map_err)?;
+    let active = persistence::read_active_profile(&state.data_dir).map_err(map_err)?;
+    if active.profile_id.as_deref() == Some(id.as_str()) {
+        persistence::write_active_profile(&state.data_dir, None, None).map_err(map_err)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn load_profile_settings(state: State<'_, AppState>, id: String) -> Result<AppSettings, String> {
+    let p = persistence::load_profile(&state.data_dir, &id).map_err(map_err)?;
+    validate_settings(&p.settings).map_err(|e| e.to_string())?;
+    Ok(p.settings)
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct UpdateProfileArgs {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub settings: AppSettings,
+}
+
+#[tauri::command]
+pub fn update_profile_cmd(state: State<'_, AppState>, args: UpdateProfileArgs) -> Result<(), String> {
+    validate_settings(&args.settings).map_err(|e| e.to_string())?;
+    let mut profile = persistence::load_profile(&state.data_dir, &args.id).map_err(map_err)?;
+    profile.metadata.name = args.name;
+    profile.metadata.description = args.description.unwrap_or_default();
+    profile.metadata.created_at = now_timestamp();
+    profile.settings = args.settings;
+    persistence::update_profile_disk(&state.data_dir, &profile).map_err(map_err)?;
+    Ok(())
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ActiveProfileDto {
+    pub profile_id: Option<String>,
+    pub profile_name: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_active_profile(state: State<'_, AppState>) -> Result<ActiveProfileDto, String> {
+    let p = persistence::read_active_profile(&state.data_dir).map_err(map_err)?;
+    Ok(ActiveProfileDto {
+        profile_id: p.profile_id,
+        profile_name: p.profile_name,
+    })
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SetActiveProfileArgs {
+    pub profile_id: Option<String>,
+    pub profile_name: Option<String>,
+}
+
+#[tauri::command]
+pub fn set_active_profile(state: State<'_, AppState>, args: SetActiveProfileArgs) -> Result<(), String> {
+    if let Some(ref id) = args.profile_id {
+        validate_settings(
+            &persistence::load_profile(&state.data_dir, id)
+                .map_err(map_err)?
+                .settings,
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    persistence::write_active_profile(
+        &state.data_dir,
+        args.profile_id.as_deref(),
+        args.profile_name.as_deref(),
+    )
+    .map_err(map_err)?;
+    Ok(())
+}
+
 #[derive(Debug, serde::Deserialize)]
 pub struct SaveSettingsArgs {
     pub settings: AppSettings,
@@ -388,6 +492,65 @@ pub fn preview_hyprland_config(state: State<'_, AppState>) -> Result<String, Str
         .map_err(|_| "state lock poisoned".to_string())?;
     let result = hyprland_adapter::export_from_settings(&settings.hyprland);
     Ok(result.content)
+}
+
+/// Salida de `hyprctl getoption <name>` (solo lectura; requiere sesión Hyprland).
+#[tauri::command]
+pub fn hyprctl_get_option(name: String) -> Result<String, String> {
+    hyprctl_get_option_inner(&name).map_err(|e| e.to_string())
+}
+
+/// Aplica en el compositor en ejecución: `hyprctl keyword <name> <value>` (no escribe archivos).
+#[tauri::command]
+pub fn hyprctl_set_keyword(name: String, value: String) -> Result<String, String> {
+    hyprctl_set_keyword_inner(&name, &value).map_err(|e| e.to_string())
+}
+
+/// Lista de atajos del compositor en JSON (`hyprctl binds -j`).
+#[tauri::command]
+pub fn hyprctl_binds_json() -> Result<String, String> {
+    hyprctl_binds_json_inner().map_err(|e| e.to_string())
+}
+
+/// Monitores en JSON (`hyprctl monitors -j`).
+#[tauri::command]
+pub fn hyprctl_monitors_json() -> Result<String, String> {
+    hyprctl_monitors_json_inner().map_err(|e| e.to_string())
+}
+
+/// Versión del compositor en JSON (`hyprctl -j version`).
+#[tauri::command]
+pub fn hyprctl_version_json() -> Result<String, String> {
+    hyprctl_version_json_inner().map_err(|e| e.to_string())
+}
+
+/// Salida JSON de `hyprctl devices -j` (touchpad, teclado, etc.).
+#[tauri::command]
+pub fn hyprctl_devices_json() -> Result<String, String> {
+    match std::process::Command::new("hyprctl").args(["devices", "-j"]).output() {
+        Ok(out) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).to_string()),
+        Ok(out) => Err(format!(
+            "hyprctl devices failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Solo `hyprctl reload` (no escribe archivos). Útil tras editar la config a mano.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct HyprctlReloadResult {
+    pub ok: bool,
+    pub output: String,
+}
+
+#[tauri::command]
+pub fn hyprctl_reload() -> HyprctlReloadResult {
+    let r = reload_compositor();
+    HyprctlReloadResult {
+        ok: r.ok,
+        output: r.output,
+    }
 }
 
 /// Returns a preview of the Waybar config that would be generated from current settings.

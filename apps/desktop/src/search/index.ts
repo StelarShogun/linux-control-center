@@ -62,6 +62,24 @@ export const SEARCH_INDEX: SettingEntry[] = [
     keywords: "apply reload hyprctl hyprland",
     page: "hyprland",
   },
+  {
+    id: "hypr-schema",
+    label: "Opciones Hyprland (schema JSON)",
+    keywords: "schema options gaps decoration keyword hyprmod",
+    page: "hyprland_schema",
+  },
+  {
+    id: "hypr-anim",
+    label: "Animaciones y curvas Bézier",
+    keywords: "animation bezier easing curve hyprland",
+    page: "animations",
+  },
+  {
+    id: "hypr-monitors",
+    label: "Monitores Hyprland",
+    keywords: "monitor display resolution layout hyprctl",
+    page: "monitors",
+  },
   // Atajos y reglas
   {
     id: "hypr-binds",
@@ -139,17 +157,57 @@ export const SEARCH_INDEX: SettingEntry[] = [
     keywords: "journal operations log audit backup",
     page: "recent_operations",
   },
+  {
+    id: "lcc-preferences",
+    label: "Preferencias de la app",
+    keywords: "preferences autosave guardado local storage lcc settings",
+    page: "preferences",
+    section: "LCC",
+  },
+  {
+    id: "hypr-reload-only",
+    label: "hyprctl reload (solo compositor)",
+    keywords: "reload recargar hyprctl compositor sin escribir archivos",
+    page: "hyprland",
+  },
 ];
+
+/** HyprMod: todas las palabras deben aparecer en el texto (substring). */
+export function matchesAllSearchTerms(haystack: string, query: string): boolean {
+  const terms = query
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (terms.length === 0) return true;
+  const h = haystack.toLowerCase();
+  return terms.every((t) => h.includes(t));
+}
 
 export function filterSettingsIndex(query: string, limit = 24): SettingEntry[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  return SEARCH_INDEX.filter(
-    (e) =>
-      e.label.toLowerCase().includes(q) ||
-      e.keywords.toLowerCase().includes(q) ||
-      e.id.includes(q)
-  ).slice(0, limit);
+  return SEARCH_INDEX.filter((e) => {
+    const blob = `${e.label} ${e.keywords} ${e.id}`;
+    return matchesAllSearchTerms(blob, q);
+  }).slice(0, limit);
+}
+
+/** Combina dos listas ya filtradas por la misma consulta, sin duplicar `id`. */
+export function mergeSearchEntries(
+  primary: SettingEntry[],
+  secondary: SettingEntry[],
+  max: number
+): SettingEntry[] {
+  const seen = new Set<string>();
+  const out: SettingEntry[] = [];
+  for (const e of [...primary, ...secondary]) {
+    if (seen.has(e.id)) continue;
+    seen.add(e.id);
+    out.push(e);
+    if (out.length >= max) break;
+  }
+  return out;
 }
 
 export function groupResultsByPage(entries: SettingEntry[]): Map<Page, SettingEntry[]> {

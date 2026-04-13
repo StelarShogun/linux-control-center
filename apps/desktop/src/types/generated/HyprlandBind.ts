@@ -3,4 +3,4 @@
 /**
  * Atajo de teclado Hyprland (`bind = …`).
  */
-export type HyprlandBind = { modifiers: Array<string>, key: string, dispatcher: string, args: string, description: string, enabled: boolean, };
+export type HyprlandBind = { modifiers: Array<string>, key: string, dispatcher: string, args: string, description: string, enabled: boolean, bind_type: string, };

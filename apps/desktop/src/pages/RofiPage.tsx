@@ -10,7 +10,9 @@ import {
 import type { ApplyToRealPathResult } from "../tauri/types";
 import OpMessage, { type OpMsg } from "../components/OpMessage";
 import WriteResultPanel from "../components/WriteResultPanel";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { psCard } from "../theme/componentStyles";
 
 interface Props {
   settings: AppSettings;
@@ -45,8 +47,8 @@ const RofiPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) => {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Rofi</h1>
-      <p style={styles.note}>
+      <h1 style={PAGE_HEADING}>Rofi</h1>
+      <p style={{ ...PAGE_NOTE, marginBottom: 24 }}>
         Controla font, iconos, modi y formato de Rofi.
         Escribe <code>~/.config/rofi/config.rasi</code> con backup automático.
       </p>
@@ -114,7 +116,7 @@ const RofiPage: FC<Props> = ({ settings, onSettingsChange, backendStatus }) => {
           value={local.theme}
           onChange={(v) => update("theme", v)}
         />
-        <p style={styles.fieldNote}>
+        <p style={{ fontSize: 12, color: ps.textMuted, margin: "4px 0 0 0" }}>
           Reserved — @theme directive support is deferred to a future phase.
         </p>
       </section>
@@ -247,40 +249,71 @@ const BoolField: FC<{
 );
 
 const BTN_BASE: React.CSSProperties = {
-  borderRadius: 8, padding: "9px 14px", cursor: "pointer",
-  fontSize: 13, border: "1px solid", fontWeight: 500, flexShrink: 0,
+  borderRadius: 999,
+  padding: "9px 18px",
+  cursor: "pointer",
+  fontSize: 13,
+  border: "1px solid",
+  fontWeight: 500,
+  flexShrink: 0,
+  fontFamily: "inherit",
 };
 
 const styles: Record<string, React.CSSProperties> = {
   page: { ...PAGE_BASE },
-  heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 4 },
-  note: { fontSize: 12, color: "#6b7280", marginBottom: 24, lineHeight: 1.6 },
-  fieldNote: { fontSize: 12, color: "#6b7280", margin: "4px 0 0 0" },
-  statusBanner: { fontSize: 12, color: "#9ca3af", background: "#151722", border: "1px solid #2e3250", borderRadius: 8, padding: "8px 12px", marginBottom: 24 },
-  statusBannerError: { color: "#fca5a5", background: "#1f0b0b", borderColor: "#3a1f1f" },
-  section: { marginBottom: 32 },
+  statusBanner: {
+    fontSize: 12,
+    color: ps.textMuted,
+    ...psCard,
+    padding: "10px 14px",
+    marginBottom: 24,
+  },
+  statusBannerError: {
+    color: ps.dangerText,
+    background: ps.dangerBg,
+    borderColor: ps.dangerBorder,
+  },
+  section: { marginBottom: 36 },
   sectionTitle: {
-    fontSize: 13, fontWeight: 600, color: "#88c0d0", textTransform: "uppercase",
-    letterSpacing: "0.08em", marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid #2e3250",
+    fontSize: 15,
+    fontWeight: 300,
+    color: ps.textAccent,
+    letterSpacing: "0.02em",
+    marginBottom: 14,
+    paddingBottom: 8,
+    borderBottom: `1px solid ${ps.borderDefault}`,
   },
   field: { display: "flex", alignItems: "center", gap: 16, marginBottom: 12 },
-  label: { width: 140, fontSize: 13, color: "#9ca3af", flexShrink: 0 },
+  label: { width: 140, fontSize: 13, color: ps.textMuted, flexShrink: 0 },
   control: { display: "flex", alignItems: "center", gap: 8 },
-  textInput: { background: "#1a1d2e", border: "1px solid #2e3250", borderRadius: 6, padding: "6px 10px", color: "#e2e8f0", fontSize: 13, fontFamily: "monospace", width: 240 },
-  boolLabel: { fontSize: 13, color: "#9ca3af" },
+  textInput: {
+    background: ps.surfaceInput,
+    border: `1px solid ${ps.borderStrong}`,
+    borderRadius: 3,
+    padding: "6px 10px",
+    color: ps.textPrimary,
+    fontSize: 13,
+    fontFamily: "monospace",
+    width: 240,
+  },
+  boolLabel: { fontSize: 13, color: ps.textMuted },
   actionRow: { display: "flex", flexWrap: "wrap" as const, gap: 8, marginTop: 8 },
-  saveBtn: { ...BTN_BASE, background: "#2e3250", borderColor: "#2e3250", color: "#e2e8f0" },
-  saveBtnNeutral: { ...BTN_BASE, background: "#1e2030", borderColor: "#2e3250", color: "#9ca3af" },
-  saveBtnAmber: { ...BTN_BASE, background: "#1a1500", borderColor: "#4a3f20", color: "#fbbf24" },
-  previewContainer: { marginTop: 24 },
-  previewLabel: { fontSize: 11, color: "#6b7280", marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.06em" },
+  saveBtn: { ...BTN_BASE, background: ps.blue, borderColor: ps.blue, color: "#ffffff" },
+  saveBtnNeutral: { ...BTN_BASE, background: ps.surfaceRaised, borderColor: ps.borderStrong, color: ps.textSecondary },
+  saveBtnAmber: { ...BTN_BASE, background: ps.warningBg, borderColor: ps.warningBorder, color: ps.warningText },
+  previewContainer: { marginTop: 28 },
+  previewLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: ps.textMuted,
+    marginBottom: 8,
+    letterSpacing: "0.02em",
+  },
   preview: {
-    background: "#151722",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
+    ...psCard,
     padding: 16,
     fontSize: 12,
-    color: "#88c0d0",
+    color: ps.textMono,
     overflow: "auto",
     fontFamily: "monospace",
     maxHeight: "min(55vh, 560px)",

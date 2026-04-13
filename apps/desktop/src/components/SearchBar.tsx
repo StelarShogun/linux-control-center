@@ -3,12 +3,26 @@ import type { Page } from "./Sidebar";
 import {
   filterSettingsIndex,
   groupResultsByPage,
+  mergeSearchEntries,
+  matchesAllSearchTerms,
   type SettingEntry,
 } from "../search/index";
+import { loadSchemaSearchBoost } from "../search/schemaSearchBoost";
+import { ps } from "../theme/playstationDark";
+
+export type NavigateOpts = {
+  focusSchemaKey?: string;
+  searchQuery?: string;
+};
 
 const PAGE_LABEL: Record<Page, string> = {
+  search: "Buscar",
+  preferences: "Preferencias",
   appearance: "Apariencia",
   hyprland: "Hyprland",
+  hyprland_schema: "Opciones Hyprland (schema)",
+  animations: "Animaciones",
+  monitors: "Monitores",
   keybindings: "Atajos",
   "window-rules": "Reglas de ventana",
   waybar: "Waybar",
@@ -24,8 +38,16 @@ const PAGE_LABEL: Record<Page, string> = {
 };
 
 interface Props {
-  onNavigate: (page: Page) => void;
+  onNavigate: (page: Page, opts?: NavigateOpts) => void;
   disabled?: boolean;
+}
+
+function filterExtraEntries(entries: SettingEntry[], query: string, limit: number): SettingEntry[] {
+  const ql = query.trim();
+  if (!ql) return [];
+  return entries
+    .filter((e) => matchesAllSearchTerms(`${e.label} ${e.keywords} ${e.id}`, ql))
+    .slice(0, limit);
 }
 
 const SearchBar: FC<Props> = ({ onNavigate, disabled }) => {
@@ -33,8 +55,18 @@ const SearchBar: FC<Props> = ({ onNavigate, disabled }) => {
   const [q, setQ] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [schemaBoost, setSchemaBoost] = useState<SettingEntry[]>([]);
 
-  const results = useMemo(() => filterSettingsIndex(q, 32), [q]);
+  useEffect(() => {
+    if (disabled) return;
+    void loadSchemaSearchBoost().then(setSchemaBoost);
+  }, [disabled]);
+
+  const results = useMemo(() => {
+    const primary = filterSettingsIndex(q, 28);
+    const fromSchema = filterExtraEntries(schemaBoost, q, 28);
+    return mergeSearchEntries(primary, fromSchema, 40);
+  }, [q, schemaBoost]);
   const grouped = useMemo(() => groupResultsByPage(results), [results]);
 
   const close = useCallback(() => {
@@ -44,11 +76,23 @@ const SearchBar: FC<Props> = ({ onNavigate, disabled }) => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      const inField =
+        t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable;
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        if (inField) return;
         e.preventDefault();
         if (disabled) return;
         setOpen(true);
         queueMicrotask(() => inputRef.current?.focus());
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+        if (inField) return;
+        e.preventDefault();
+        if (disabled) return;
+        const text = open ? q : "";
+        onNavigate("search", { searchQuery: text });
+        setOpen(false);
       }
       if (e.key === "Escape" && open) {
         e.preventDefault();
@@ -57,7 +101,7 @@ const SearchBar: FC<Props> = ({ onNavigate, disabled }) => {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [disabled, open, close]);
+  }, [disabled, open, close, onNavigate, q]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -69,8 +113,9 @@ const SearchBar: FC<Props> = ({ onNavigate, disabled }) => {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  const pick = (e: SettingEntry) => {
-    onNavigate(e.page);
+  const pick = (entry: SettingEntry) => {
+    const focusSchemaKey = entry.id.startsWith("schema:") ? entry.id.slice(7) : undefined;
+    onNavigate(entry.page, focusSchemaKey ? { focusSchemaKey } : undefined);
     close();
   };
 
@@ -91,6 +136,9 @@ const SearchBar: FC<Props> = ({ onNavigate, disabled }) => {
         <span style={styles.triggerHint}>Buscar ajustes</span>
         <kbd style={styles.kbd}>Ctrl</kbd>
         <kbd style={styles.kbd}>K</kbd>
+        <span style={styles.orHint}> / </span>
+        <kbd style={styles.kbd}>Ctrl</kbd>
+        <kbd style={styles.kbd}>F</kbd>
       </button>
       {open && !disabled && (
         <div style={styles.dropdown} role="listbox">
@@ -104,6 +152,19 @@ const SearchBar: FC<Props> = ({ onNavigate, disabled }) => {
             autoComplete="off"
             aria-label="Buscar ajustes"
           />
+          <div style={{ padding: "6px 10px", borderBottom: `1px solid ${ps.borderDefault}` }}>
+            <button
+              type="button"
+              className="ps-btn-secondary"
+              style={{ fontSize: 12, width: "100%" }}
+              onClick={() => {
+                onNavigate("search", { searchQuery: q });
+                close();
+              }}
+            >
+              Ver todos los resultados…
+            </button>
+          </div>
           {results.length === 0 ? (
             <div style={styles.empty}>
               {q.trim() ? "Sin resultados" : "Escribe para buscar"}
@@ -118,6 +179,7 @@ const SearchBar: FC<Props> = ({ onNavigate, disabled }) => {
                       key={item.id}
                       type="button"
                       role="option"
+                      className="ps-search-row"
                       style={styles.resultRow}
                       onClick={() => pick(item)}
                     >
@@ -144,24 +206,26 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 8,
     width: "100%",
-    padding: "6px 12px",
-    borderRadius: 8,
-    border: "1px solid #3d4466",
-    background: "#151722",
-    color: "#9ca3af",
+    padding: "8px 14px",
+    borderRadius: 12,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfacePanel,
+    color: ps.textSecondary,
     cursor: "pointer",
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "inherit",
     textAlign: "left",
+    transition: "border-color 180ms ease, box-shadow 180ms ease",
   },
   triggerHint: { flex: 1 },
+  orHint: { fontSize: 11, color: ps.textMuted },
   kbd: {
     fontSize: 10,
     padding: "2px 6px",
-    borderRadius: 4,
-    border: "1px solid #3d4466",
-    background: "#1e2030",
-    color: "#6b7280",
+    borderRadius: 3,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfaceInput,
+    color: ps.textMuted,
   },
   dropdown: {
     position: "absolute",
@@ -169,51 +233,51 @@ const styles: Record<string, React.CSSProperties> = {
     left: 0,
     right: 0,
     zIndex: 50,
-    background: "#1a1c28",
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+    background: ps.surfaceOverlay,
+    border: `1px solid ${ps.borderDefault}`,
+    borderRadius: 12,
+    boxShadow: ps.shadowDropdown,
     overflow: "hidden",
   },
   input: {
     width: "100%",
     boxSizing: "border-box",
-    padding: "10px 12px",
+    padding: "12px 14px",
     border: "none",
-    borderBottom: "1px solid #2e3250",
-    background: "#12141c",
-    color: "#e2e8f0",
+    borderBottom: `1px solid ${ps.borderDefault}`,
+    background: ps.surfaceCode,
+    color: ps.textPrimary,
     fontSize: 14,
     fontFamily: "inherit",
     outline: "none",
   },
-  empty: { padding: 16, fontSize: 12, color: "#6b7280" },
+  empty: { padding: 16, fontSize: 12, color: ps.textMuted },
   results: { maxHeight: 320, overflowY: "auto" },
   group: { padding: "6px 0" },
   groupTitle: {
-    fontSize: 10,
-    fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    color: "#6b7280",
-    padding: "4px 12px",
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: "0.04em",
+    color: ps.textMuted,
+    padding: "6px 14px",
   },
   resultRow: {
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-start",
     width: "100%",
-    padding: "8px 12px",
+    padding: "8px 14px",
     border: "none",
     background: "transparent",
-    color: "#d1d5db",
+    color: ps.textSecondary,
     cursor: "pointer",
     textAlign: "left",
     fontFamily: "inherit",
     fontSize: 13,
+    transition: "background 180ms ease, color 180ms ease",
   },
   resultLabel: { fontWeight: 500 },
-  resultMeta: { fontSize: 10, color: "#6b7280", marginTop: 2 },
+  resultMeta: { fontSize: 11, color: ps.textMuted, marginTop: 2 },
 };
 
 export default SearchBar;

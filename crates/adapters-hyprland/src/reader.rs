@@ -373,6 +373,7 @@ fn parse_bind_line(key: &str, value: &str) -> Option<HyprlandBind> {
             args,
             description,
             enabled: true,
+            bind_type: kl,
         });
     }
 
@@ -407,6 +408,7 @@ fn parse_bind_line(key: &str, value: &str) -> Option<HyprlandBind> {
             },
             description: String::new(),
             enabled: true,
+            bind_type: kl,
         });
     }
 
@@ -584,6 +586,8 @@ windowrule = opacity 0.9, ^(.*)$
         assert_eq!(s.keyboard.binds[0].key, "Q");
         assert_eq!(s.keyboard.binds[0].dispatcher, "exec");
         assert_eq!(s.keyboard.binds[0].args, "foot");
+        assert_eq!(s.keyboard.binds[0].bind_type, "bind");
+        assert_eq!(s.keyboard.binds[1].bind_type, "bindl");
         assert_eq!(s.keyboard.binds[1].dispatcher, "killactive");
         assert_eq!(s.windows.rules.len(), 2);
         assert_eq!(s.windows.rules[0].rule, "float");

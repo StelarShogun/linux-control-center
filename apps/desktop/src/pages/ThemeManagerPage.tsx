@@ -11,7 +11,8 @@ import {
 } from "../tauri/api";
 import type { ThemePreviewDto } from "../tauri/types";
 import OpMessage, { type OpMsg } from "../components/OpMessage";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
 
 type PreviewTab = "hyprland" | "waybar_jsonc" | "waybar_css" | "rofi";
 
@@ -121,8 +122,8 @@ const ThemeManagerPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Theme Manager</h1>
-      <p style={styles.note}>
+      <h1 style={PAGE_HEADING}>Theme Manager</h1>
+      <p style={{ ...PAGE_NOTE, marginBottom: 16 }}>
         Presets builtin con tokens compartidos: Hyprland (include gestionado),{" "}
         <code>config.jsonc</code> + <code>style.css</code> de Waybar, y Rofi (
         <code>config.rasi</code>). Se crea un snapshot global antes de escribir y uno por destino
@@ -130,7 +131,7 @@ const ThemeManagerPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
       </p>
 
       {backendStatus !== "ready" && (
-        <p style={styles.note}>Backend no disponible: ejecuta la app con Tauri.</p>
+        <p style={PAGE_NOTE}>Backend no disponible: ejecuta la app con Tauri.</p>
       )}
 
       {backendStatus === "ready" && (
@@ -245,7 +246,7 @@ const ThemeManagerPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
           <div style={styles.actions}>
             <button
               type="button"
-              style={styles.applyBtn}
+              className="ps-btn-primary"
               disabled={busy || !presetId}
               onClick={() => void handleApply()}
             >
@@ -262,41 +263,43 @@ const ThemeManagerPage: FC<Props> = ({ onSettingsChange, backendStatus }) => {
 
 const styles: Record<string, React.CSSProperties> = {
   page: { ...PAGE_BASE },
-  heading: { fontSize: 22, fontWeight: 600, marginBottom: 8, color: "#e2e8f0" },
-  note: { fontSize: 13, color: "#94a3b8", lineHeight: 1.5, marginBottom: 16 },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 14, fontWeight: 600, color: "#88c0d0", marginBottom: 12 },
+  section: { marginBottom: 28 },
+  sectionTitle: { fontSize: 15, fontWeight: 300, color: ps.textAccent, marginBottom: 12 },
   row: { display: "flex", alignItems: "center", gap: 12, marginBottom: 10 },
-  label: { width: 100, fontSize: 13, color: "#9ca3af" },
+  label: { width: 100, fontSize: 13, color: ps.textMuted },
   select: {
     flex: 1,
     maxWidth: 360,
     padding: "8px 10px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#151722",
-    color: "#e2e8f0",
+    borderRadius: 3,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfaceInput,
+    color: ps.textPrimary,
     fontSize: 13,
   },
   checkGrid: { display: "flex", flexDirection: "column", gap: 8 },
-  check: { fontSize: 13, color: "#cbd5e1", display: "flex", alignItems: "center", gap: 8 },
+  check: { fontSize: 13, color: ps.textSecondary, display: "flex", alignItems: "center", gap: 8 },
   tabs: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 },
   tab: {
     padding: "6px 12px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#1a1d2e",
-    color: "#9ca3af",
+    borderRadius: 999,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfacePanel,
+    color: ps.textMuted,
     cursor: "pointer",
     fontSize: 12,
   },
-  tabActive: { borderColor: "#88c0d0", color: "#e2e8f0", background: "#252840" },
+  tabActive: {
+    borderColor: ps.blue,
+    color: ps.textPrimary,
+    background: "rgba(0, 112, 204, 0.2)",
+  },
   tabGhost: {
     padding: "6px 12px",
-    borderRadius: 6,
-    border: "1px dashed #4b5563",
+    borderRadius: 999,
+    border: `1px dashed ${ps.borderStrong}`,
     background: "transparent",
-    color: "#6b7280",
+    color: ps.textMuted,
     cursor: "pointer",
     fontSize: 12,
     marginLeft: "auto",
@@ -304,27 +307,17 @@ const styles: Record<string, React.CSSProperties> = {
   pre: {
     margin: 0,
     padding: 14,
-    borderRadius: 8,
-    background: "#0f1118",
-    border: "1px solid #2e3250",
+    borderRadius: 12,
+    background: ps.surfaceCode,
+    border: `1px solid ${ps.borderDefault}`,
     fontSize: 11,
     lineHeight: 1.45,
     overflow: "auto",
     maxHeight: "min(58vh, 560px)",
-    color: "#a5b4fc",
+    color: ps.textMono,
     fontFamily: "ui-monospace, monospace",
   },
-  actions: { marginTop: 8 },
-  applyBtn: {
-    padding: "10px 20px",
-    borderRadius: 8,
-    border: "none",
-    background: "#0f766e",
-    color: "#ecfdf5",
-    fontWeight: 600,
-    fontSize: 14,
-    cursor: "pointer",
-  },
+  actions: { marginTop: 12 },
 };
 
 export default ThemeManagerPage;

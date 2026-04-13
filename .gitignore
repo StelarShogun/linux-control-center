@@ -5,3 +5,7 @@ dist/
 .DS_Store
 apps/desktop/src-tauri/target/
 apps/desktop/dist/
+
+# Referencia local HyprMod (no versionar)
+implementacion/
+

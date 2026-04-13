@@ -1,8 +1,12 @@
 pub mod adapter;
+pub mod ipc_keyword;
 pub mod reader;
 pub mod types;
 
 pub use adapter::{export_from_settings, load_fixture, reload_compositor};
+pub use ipc_keyword::{
+    binds_json, get_option, monitors_json, set_keyword, version_json, HyprctlIpcError,
+};
 pub use reader::read_from_system;
 pub use types::{FixtureSource, HyprlandExportResult, HyprlandFixtureResult, ReloadOutput};
 

@@ -49,6 +49,16 @@ pub fn export_from_settings(s: &HyprlandSettings) -> HyprlandExportResult {
     lines.push(String::new());
     lines.push("animations {".into());
     lines.push(format!("    enabled = {}", s.animations_enabled));
+    for c in &s.bezier_curves {
+        let n = c.name.trim();
+        if n.is_empty() {
+            continue;
+        }
+        lines.push(format!(
+            "    bezier = {}, {}, {}, {}, {}",
+            n, c.x1, c.y1, c.x2, c.y2
+        ));
+    }
     lines.push("}".into());
 
     if !s.keyboard.binds.is_empty() {
@@ -63,10 +73,24 @@ pub fn export_from_settings(s: &HyprlandSettings) -> HyprlandExportResult {
             } else {
                 b.modifiers.join(" ")
             };
-            lines.push(format!(
-                "bind = {}, {}, {}, {}",
-                mods, b.key, b.dispatcher, b.args
-            ));
+            let bt = b.bind_type.trim();
+            let bt = if bt.is_empty() { "bind" } else { bt };
+            if bt == "bindd" || bt == "binddr" {
+                lines.push(format!(
+                    "{} = {}, {}, {}, {}, {}",
+                    bt, mods, b.key, b.dispatcher, b.args, b.description
+                ));
+            } else if b.args.trim().is_empty() {
+                lines.push(format!(
+                    "{} = {}, {}, {}",
+                    bt, mods, b.key, b.dispatcher
+                ));
+            } else {
+                lines.push(format!(
+                    "{} = {}, {}, {}, {}",
+                    bt, mods, b.key, b.dispatcher, b.args
+                ));
+            }
         }
     }
 
@@ -108,6 +132,18 @@ pub fn export_from_settings(s: &HyprlandSettings) -> HyprlandExportResult {
     ));
     lines.push("    }".into());
     lines.push("}".into());
+
+    if !s.schema_overrides.is_empty() {
+        lines.push(String::new());
+        lines.push("# —— Schema overrides (Linux Control Center)".into());
+        let mut keys: Vec<&String> = s.schema_overrides.keys().collect();
+        keys.sort();
+        for k in keys {
+            if let Some(v) = s.schema_overrides.get(k) {
+                lines.push(format!("{k} = {v}"));
+            }
+        }
+    }
 
     HyprlandExportResult { content: lines.join("\n") + "\n" }
 }

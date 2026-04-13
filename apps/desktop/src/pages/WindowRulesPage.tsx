@@ -2,7 +2,9 @@ import { useState, type FC } from "react";
 import type { AppSettings, HyprlandWindowRule } from "../types/settings";
 import type { BackendStatus } from "../types/backend";
 import { saveSettings } from "../tauri/api";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { psCard } from "../theme/componentStyles";
 
 interface Props {
   settings: AppSettings;
@@ -52,21 +54,35 @@ const WindowRulesPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Reglas de ventana</h1>
-      <p style={styles.note}>
+      <h1 style={PAGE_HEADING}>Reglas de ventana</h1>
+      <p style={PAGE_NOTE}>
         Se exportan como <code>windowrulev2 = …</code>. «Sync desde sistema» importa{" "}
         <code>windowrulev2</code> y <code>windowrule</code> (v1) desde tu cadena de configs Hyprland.
       </p>
       {msg && (
-        <p style={{ ...styles.note, color: msg.startsWith("Error") ? "#f87171" : "#4ade80" }}>{msg}</p>
+        <p
+          style={{
+            ...PAGE_NOTE,
+            color: msg.startsWith("Error") ? ps.dangerText : ps.successText,
+          }}
+        >
+          {msg}
+        </p>
       )}
       <div style={styles.toolbar}>
-        <button type="button" style={styles.btn} onClick={() => { setDraft(emptyRule()); setModal("add"); }}>
+        <button
+          type="button"
+          className="ps-btn-secondary"
+          onClick={() => {
+            setDraft(emptyRule());
+            setModal("add");
+          }}
+        >
           Añadir regla
         </button>
         <button
           type="button"
-          style={styles.btnPrimary}
+          className="ps-btn-primary"
           disabled={backendStatus !== "ready" || busy}
           onClick={() => void save()}
         >
@@ -75,7 +91,7 @@ const WindowRulesPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
       </div>
       {rules.length === 0 ? (
         <div style={styles.emptyPanel}>
-          <p style={styles.note}>No hay reglas en la app.</p>
+          <p style={PAGE_NOTE}>No hay reglas en la app.</p>
           <p style={styles.noteMuted}>
             Usa «Sync desde sistema» para leer <code>windowrulev2</code> / <code>windowrule</code> desde tus
             archivos Hyprland.
@@ -197,12 +213,12 @@ const WindowRulesPage: FC<Props> = ({ settings, onSettingsChange, backendStatus 
               />
             </label>
             <div style={styles.modalActions}>
-              <button type="button" style={styles.btn} onClick={() => setModal(null)}>
+              <button type="button" className="ps-btn-secondary" onClick={() => setModal(null)}>
                 Cancelar
               </button>
               <button
                 type="button"
-                style={styles.btnPrimary}
+                className="ps-btn-primary"
                 onClick={() => {
                   setRules([...rules, draft]);
                   setModal(null);
@@ -227,46 +243,24 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: 0,
     minWidth: 0,
   },
-  heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 },
-  note: { fontSize: 12, color: "#6b7280", marginBottom: 16 },
-  noteMuted: { fontSize: 12, color: "#4b5563", marginTop: 8, lineHeight: 1.5 },
+  noteMuted: { fontSize: 12, color: ps.textDisabled, marginTop: 8, lineHeight: 1.5 },
   emptyPanel: {
     flex: 1,
     minHeight: 200,
-    padding: 24,
-    borderRadius: 8,
-    border: "1px dashed #2e3250",
-    background: "#151722",
+    padding: 28,
+    borderRadius: 12,
+    border: `1px dashed ${ps.borderStrong}`,
+    background: ps.surfacePanel,
   },
   tableWrap: { overflow: "auto", flex: 1, minHeight: 0, width: "100%" },
-  toolbar: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" },
-  btn: {
-    padding: "6px 14px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#252840",
-    color: "#a0aec0",
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "inherit",
-  },
-  btnPrimary: {
-    padding: "6px 14px",
-    borderRadius: 6,
-    border: "1px solid #3d5a50",
-    background: "#15201c",
-    color: "#86efac",
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "inherit",
-  },
+  toolbar: { display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" },
   btnDanger: {
-    padding: "4px 8px",
+    padding: "4px 10px",
     fontSize: 11,
-    borderRadius: 4,
-    border: "1px solid #5a3030",
-    background: "#221010",
-    color: "#fca5a5",
+    borderRadius: 3,
+    border: `1px solid ${ps.dangerBorder}`,
+    background: ps.dangerBg,
+    color: ps.dangerText,
     cursor: "pointer",
     fontFamily: "inherit",
   },
@@ -274,50 +268,48 @@ const styles: Record<string, React.CSSProperties> = {
   th: {
     textAlign: "left",
     padding: 8,
-    background: "#1e2030",
-    color: "#88c0d0",
-    borderBottom: "1px solid #2e3250",
+    background: ps.surfaceInput,
+    color: ps.textAccent,
+    borderBottom: `1px solid ${ps.borderDefault}`,
   },
-  td: { padding: 8, borderBottom: "1px solid #252840", verticalAlign: "middle" },
-  tdMono: { padding: 8, borderBottom: "1px solid #252840" },
+  td: { padding: 8, borderBottom: `1px solid ${ps.borderSubtle}`, verticalAlign: "middle" },
+  tdMono: { padding: 8, borderBottom: `1px solid ${ps.borderSubtle}` },
   in: {
     width: "100%",
     minWidth: 80,
     padding: 4,
-    background: "#151722",
-    border: "1px solid #3d4466",
-    borderRadius: 4,
-    color: "#e2e8f0",
+    background: ps.surfaceCode,
+    border: `1px solid ${ps.borderStrong}`,
+    borderRadius: 3,
+    color: ps.textPrimary,
     fontFamily: "monospace",
     fontSize: 11,
   },
   overlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.55)",
+    background: "rgba(0, 0, 0, 0.72)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 100,
   },
   modal: {
-    background: "#1a1c28",
-    border: "1px solid #2e3250",
-    borderRadius: 10,
-    padding: 20,
+    ...psCard,
+    padding: 22,
     width: "min(420px, 92vw)",
     display: "flex",
     flexDirection: "column",
     gap: 12,
   },
-  modalTitle: { fontSize: 16, color: "#e2e8f0", margin: 0 },
-  lab: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "#9ca3af" },
+  modalTitle: { fontSize: 18, fontWeight: 300, color: ps.textPrimary, margin: 0 },
+  lab: { display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: ps.textMuted },
   inFull: {
     padding: 8,
-    background: "#151722",
-    border: "1px solid #3d4466",
-    borderRadius: 6,
-    color: "#e2e8f0",
+    background: ps.surfaceInput,
+    border: `1px solid ${ps.borderStrong}`,
+    borderRadius: 3,
+    color: ps.textPrimary,
     fontFamily: "inherit",
     fontSize: 13,
   },

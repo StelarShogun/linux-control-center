@@ -7,7 +7,9 @@ import {
   setPowerProfile,
   setSuspendSettings,
 } from "../tauri/api";
-import { PAGE_BASE } from "../layout/pageLayout";
+import { PAGE_BASE, PAGE_HEADING, PAGE_NOTE } from "../layout/pageLayout";
+import { ps } from "../theme/playstationDark";
+import { psBtnCompact, psCard } from "../theme/componentStyles";
 
 interface Props {
   backendStatus: BackendStatus;
@@ -161,17 +163,17 @@ const PowerPage: FC<Props> = ({ backendStatus }) => {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Energía</h1>
-      <p style={styles.note}>
+      <h1 style={PAGE_HEADING}>Energía</h1>
+      <p style={PAGE_NOTE}>
         Perfiles via <code>powerprofilesctl</code> y suspension automatica via <code>hypridle</code>
         con tiempos separados para bateria y corriente, como en Windows.
       </p>
-      {backendStatus !== "ready" && <p style={styles.note}>Backend no disponible.</p>}
+      {backendStatus !== "ready" && <p style={PAGE_NOTE}>Backend no disponible.</p>}
       {backendStatus === "ready" && (
         <div style={styles.toolbar}>
           <button
             type="button"
-            style={styles.btn}
+            className="ps-btn-secondary"
             onClick={() => void load()}
             disabled={profileBusy || suspendBusy}
           >
@@ -179,7 +181,7 @@ const PowerPage: FC<Props> = ({ backendStatus }) => {
           </button>
         </div>
       )}
-      {error && <p style={{ ...styles.note, color: "#f87171" }}>{error}</p>}
+      {error && <p style={{ ...PAGE_NOTE, color: ps.dangerText }}>{error}</p>}
       {status && (
         <div style={styles.card}>
           <div style={styles.row}>
@@ -253,7 +255,7 @@ const PowerPage: FC<Props> = ({ backendStatus }) => {
 
           <div style={styles.section}>
             <h2 style={styles.h2}>Suspensión</h2>
-            <p style={styles.note}>
+            <p style={PAGE_NOTE}>
               Configura por separado cuánto esperar antes de suspender cuando el equipo está con
               batería o conectado a la corriente.
             </p>
@@ -303,7 +305,7 @@ const PowerPage: FC<Props> = ({ backendStatus }) => {
               <div style={styles.actionsRow}>
                 <button
                   type="button"
-                  style={styles.btn}
+                  className="ps-btn-primary"
                   disabled={suspendBusy || !hasSuspendChanges}
                   onClick={() => void applySuspend()}
                 >
@@ -326,58 +328,43 @@ const PowerPage: FC<Props> = ({ backendStatus }) => {
 
 const styles: Record<string, React.CSSProperties> = {
   page: { ...PAGE_BASE },
-  heading: { fontSize: 22, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 },
-  note: { fontSize: 12, color: "#6b7280", marginBottom: 16, lineHeight: 1.6 },
-  toolbar: { marginBottom: 16 },
-  btn: {
-    padding: "6px 14px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#252840",
-    color: "#a0aec0",
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "inherit",
-  },
+  toolbar: { marginBottom: 20 },
   card: {
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    padding: 16,
-    background: "#12141c",
-    marginBottom: 24,
+    ...psCard,
+    padding: 18,
+    marginBottom: 28,
   },
-  row: { display: "flex", gap: 12, fontSize: 13, color: "#d1d5db", marginBottom: 8 },
-  k: { color: "#6b7280", minWidth: 160 },
-  mono: { color: "#88c0d0" },
-  section: { marginTop: 8, marginBottom: 24 },
-  h2: { fontSize: 14, color: "#88c0d0", marginBottom: 12 },
+  row: { display: "flex", gap: 12, fontSize: 13, color: ps.textSecondary, marginBottom: 8 },
+  k: { color: ps.textMuted, minWidth: 160 },
+  mono: { color: ps.textMono },
+  section: { marginTop: 12, marginBottom: 28 },
+  h2: {
+    fontSize: 15,
+    fontWeight: 300,
+    color: ps.textAccent,
+    marginBottom: 14,
+    letterSpacing: "0.02em",
+  },
   btns: { display: "flex", flexWrap: "wrap", gap: 10 },
   profileBtn: {
-    padding: "8px 16px",
-    borderRadius: 6,
-    border: "1px solid #3d5a50",
-    background: "#15201c",
-    color: "#86efac",
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "inherit",
+    ...psBtnCompact,
+    borderRadius: 999,
   },
   profileBtnActive: {
-    borderColor: "#86efac",
-    boxShadow: "0 0 0 1px rgba(134, 239, 172, 0.25)",
-    background: "#193126",
+    borderColor: ps.blue,
+    boxShadow: "0 0 0 2px rgba(0, 112, 204, 0.35)",
+    background: "rgba(0, 112, 204, 0.2)",
+    color: ps.textPrimary,
   },
   profileBtnDisabled: {
-    borderColor: "#343b46",
-    background: "#171a22",
-    color: "#6b7280",
+    borderColor: ps.borderSubtle,
+    background: ps.surfaceCode,
+    color: ps.textDisabled,
     cursor: "not-allowed",
   },
   suspendPanel: {
-    border: "1px solid #2e3250",
-    borderRadius: 8,
-    padding: 16,
-    background: "#12141c",
+    ...psCard,
+    padding: 18,
   },
   suspendGrid: {
     display: "grid",
@@ -392,7 +379,7 @@ const styles: Record<string, React.CSSProperties> = {
   fieldLabel: {
     display: "block",
     fontSize: 13,
-    color: "#d1d5db",
+    color: ps.textSecondary,
   },
   actionsRow: {
     display: "flex",
@@ -402,14 +389,14 @@ const styles: Record<string, React.CSSProperties> = {
   select: {
     minWidth: 220,
     padding: "9px 12px",
-    borderRadius: 6,
-    border: "1px solid #3d4466",
-    background: "#181c28",
-    color: "#e2e8f0",
+    borderRadius: 3,
+    border: `1px solid ${ps.borderStrong}`,
+    background: ps.surfaceInput,
+    color: ps.textPrimary,
     fontSize: 13,
     fontFamily: "inherit",
   },
-  hint: { fontSize: 11, color: "#6b7280", marginTop: 12, lineHeight: 1.6 },
+  hint: { fontSize: 12, color: ps.textMuted, marginTop: 14, lineHeight: 1.6 },
 };
 
 export default PowerPage;

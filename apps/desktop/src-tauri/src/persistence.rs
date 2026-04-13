@@ -139,6 +139,94 @@ pub fn load_profile(base_dir: &Path, id: &ProfileId) -> Result<SettingsProfile, 
     })
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProfileListItem {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub created_at: String,
+}
+
+/// Lista perfiles guardados (metadatos), más recientes primero por `created_at`.
+pub fn list_profiles(base_dir: &Path) -> Result<Vec<ProfileListItem>, PersistenceError> {
+    let dir = profiles_dir(base_dir);
+    if !dir.is_dir() {
+        return Ok(vec![]);
+    }
+    let mut out: Vec<ProfileListItem> = Vec::new();
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        let content = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let p: SettingsProfile = match SettingsProfile::from_toml_str(&content) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        out.push(ProfileListItem {
+            id: p.metadata.id,
+            name: p.metadata.name,
+            description: p.metadata.description,
+            created_at: p.metadata.created_at,
+        });
+    }
+    out.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(out)
+}
+
+pub fn delete_profile_file(base_dir: &Path, id: &ProfileId) -> Result<(), PersistenceError> {
+    validate_id(id)?;
+    let path = profile_path(base_dir, id);
+    if path.exists() {
+        fs::remove_file(&path)?;
+    }
+    Ok(())
+}
+
+pub fn update_profile_disk(base_dir: &Path, profile: &SettingsProfile) -> Result<(), PersistenceError> {
+    validate_id(&profile.metadata.id)?;
+    save_profile(base_dir, profile)
+}
+
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct ActiveProfilePointer {
+    pub profile_id: Option<String>,
+    pub profile_name: Option<String>,
+}
+
+fn active_profile_json_path(base_dir: &Path) -> PathBuf {
+    base_dir.join("active_profile.json")
+}
+
+pub fn read_active_profile(base_dir: &Path) -> Result<ActiveProfilePointer, PersistenceError> {
+    let p = active_profile_json_path(base_dir);
+    if !p.exists() {
+        return Ok(ActiveProfilePointer::default());
+    }
+    let s = fs::read_to_string(&p)?;
+    serde_json::from_str(&s).map_err(|e| PersistenceError::Json(e.to_string()))
+}
+
+pub fn write_active_profile(
+    base_dir: &Path,
+    profile_id: Option<&str>,
+    profile_name: Option<&str>,
+) -> Result<(), PersistenceError> {
+    fs::create_dir_all(base_dir)?;
+    let v = ActiveProfilePointer {
+        profile_id: profile_id.map(str::to_string),
+        profile_name: profile_name.map(str::to_string),
+    };
+    let s =
+        serde_json::to_string_pretty(&v).map_err(|e| PersistenceError::Json(e.to_string()))?;
+    atomic_write(&active_profile_json_path(base_dir), &s)
+}
+
 pub fn load_current_settings(base_dir: &Path) -> Result<Option<AppSettings>, PersistenceError> {
     let path = current_settings_path(base_dir);
     if !path.exists() {

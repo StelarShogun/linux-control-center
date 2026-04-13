@@ -14,9 +14,9 @@ pub use fixture::FixtureSource;
 pub use error::CoreError;
 pub use profile::{ProfileId, ProfileMetadata, SettingsProfile};
 pub use settings::{
-    AppearanceSettings, AppSettings, HyprlandBind, HyprlandInputSettings, HyprlandKeyboardSettings,
-    HyprlandSettings, HyprlandWindowRule, HyprlandWindowSettings, RofiSettings,
-    WallpaperAppPreferences, WaybarSettings,
+    AppearanceSettings, AppSettings, HyprlandBezierCurve, HyprlandBind, HyprlandInputSettings,
+    HyprlandKeyboardSettings, HyprlandSettings, HyprlandWindowRule, HyprlandWindowSettings,
+    RofiSettings, WallpaperAppPreferences, WaybarSettings,
 };
 pub use wallpaper::{
     validate_wallpaper_id, CurrentWallpaperState, WallpaperApplyMode, WallpaperApplyPlan,
@@ -110,9 +110,9 @@ mod ts_export {
 
     use crate::journal::{JournalOperationAction, OperationJournalEntry};
     use crate::settings::{
-        AppearanceSettings, AppSettings, HyprlandBind, HyprlandInputSettings, HyprlandKeyboardSettings,
-        HyprlandSettings, HyprlandWindowRule, HyprlandWindowSettings, RofiSettings,
-        WallpaperAppPreferences, WaybarSettings,
+        AppearanceSettings, AppSettings, HyprlandBezierCurve, HyprlandBind, HyprlandInputSettings,
+        HyprlandKeyboardSettings, HyprlandSettings, HyprlandWindowRule, HyprlandWindowSettings,
+        RofiSettings, WallpaperAppPreferences, WaybarSettings,
     };
     use crate::theme::{ThemePreset, ThemePresetSummary, ThemeTokenSet, ThemeVariant};
     use crate::wallpaper::{
@@ -125,6 +125,7 @@ mod ts_export {
     #[test]
     fn export_bindings() {
         AppearanceSettings::export().expect("AppearanceSettings");
+        HyprlandBezierCurve::export().expect("HyprlandBezierCurve");
         HyprlandBind::export().expect("HyprlandBind");
         HyprlandKeyboardSettings::export().expect("HyprlandKeyboardSettings");
         HyprlandWindowRule::export().expect("HyprlandWindowRule");
