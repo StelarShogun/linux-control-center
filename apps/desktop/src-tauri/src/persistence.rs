@@ -224,7 +224,8 @@ pub fn write_active_profile(
     };
     let s =
         serde_json::to_string_pretty(&v).map_err(|e| PersistenceError::Json(e.to_string()))?;
-    atomic_write(&active_profile_json_path(base_dir), &s)
+    atomic_write(&active_profile_json_path(base_dir), &s)?;
+    Ok(())
 }
 
 pub fn load_current_settings(base_dir: &Path) -> Result<Option<AppSettings>, PersistenceError> {

@@ -1,13 +1,11 @@
 //! Comandos Tauri — Wallpaper Module (Fase E).
 
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use core_model::{
     journal::{truncate_journal_error, JournalOperationAction, OperationJournalEntry},
-    settings::AppSettings,
     snapshot::create_snapshot as create_snapshot_model,
     validate::validate_settings,
     validate_wallpaper_id,
@@ -18,9 +16,7 @@ use core_model::{
 };
 use time::format_description::well_known::Rfc3339;
 use tauri::State;
-use wallpaper_catalog::{
-    rebuild_from_disk, scan_catalog, CatalogDiskFile, CatalogError, MAX_CATALOG_ENTRIES,
-};
+use wallpaper_catalog::{rebuild_from_disk, scan_catalog, CatalogError, MAX_CATALOG_ENTRIES};
 use wallpaper_engine_adapter::{detect_backend, query_current_wallpaper, wallpaper_apply, StdCommandRunner};
 
 use crate::{
@@ -79,7 +75,7 @@ fn apply_filter_limit(col: &WallpaperCollection, filter: &WallpaperFilter, limit
         .map(|n| n as usize)
         .unwrap_or(MAX_CATALOG_ENTRIES)
         .min(MAX_CATALOG_ENTRIES);
-    let mut entries: Vec<_> = col
+    let entries: Vec<_> = col
         .entries
         .iter()
         .filter(|e| {
